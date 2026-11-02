@@ -12,6 +12,6 @@ escrita para testar.
 
 __version__ = "0.0.0"
 APP_NAME = "EIGAN"
-APP_TAGLINE = "Enhanced Intelligent Guardian for Autonomous Assessment"
+APP_TAGLINE = "Auditoria defensiva de segurança, sem IA e sem chaves de API"
 
 __all__ = ["APP_NAME", "APP_TAGLINE", "__version__"]
