@@ -1,0 +1,120 @@
+{
+  "fonte": "Curadoria própria do EIGAN: datas de fim de suporte copiadas das páginas oficiais de ciclo de vida de cada fabricante (Microsoft Learn/Support, Canonical, Debian, Red Hat/CentOS), listadas em '_fontes'. endoflife.date só foi usado para conferência cruzada.",
+  "licenca": "Apache-2.0 (mesma licença do EIGAN). As datas são fatos públicos compilados das fontes citadas; nenhum texto de terceiros foi copiado.",
+  "url": "https://learn.microsoft.com/en-us/lifecycle/faq/windows",
+  "atualizado": "2026-11-01",
+  "_verificado_em": "2026-11-01",
+  "_obs": "Datas de fim de suporte (último dia com atualizações de segurança gratuitas do fabricante). 'fim' em AAAA-MM-DD. Ubuntu LTS: a Canonical publica só mês/ano, então usamos o último dia do mês; versões intermediárias do Ubuntu usam a data exata do anúncio de fim de vida. Versões mais antigas que a primeira de cada tabela são tratadas como sem suporte por dedução (o suporte de uma versão anterior sempre termina antes); versões que não estão na tabela e são mais novas ficam sem avaliação.",
+  "_fontes": {
+    "windows_11": [
+      "https://learn.microsoft.com/en-us/windows/release-health/windows11-release-information",
+      "https://learn.microsoft.com/en-us/lifecycle/products/windows-11-home-and-pro",
+      "https://learn.microsoft.com/en-us/lifecycle/products/windows-11-enterprise-and-education"
+    ],
+    "windows_10": [
+      "https://learn.microsoft.com/en-us/windows/release-health/release-information",
+      "https://learn.microsoft.com/en-us/lifecycle/products/windows-10-home-and-pro",
+      "https://learn.microsoft.com/en-us/lifecycle/products/windows-10-enterprise-and-education"
+    ],
+    "windows_ltsc": [
+      "https://learn.microsoft.com/en-us/lifecycle/products/windows-10-2015-ltsb",
+      "https://learn.microsoft.com/en-us/lifecycle/products/windows-10-2016-ltsb",
+      "https://learn.microsoft.com/en-us/lifecycle/products/windows-10-enterprise-ltsc-2019",
+      "https://learn.microsoft.com/en-us/lifecycle/products/windows-10-enterprise-ltsc-2021",
+      "https://learn.microsoft.com/en-us/lifecycle/products/windows-10-iot-enterprise-ltsc-2021",
+      "https://learn.microsoft.com/en-us/windows/release-health/windows11-release-information"
+    ],
+    "windows_server": [
+      "https://learn.microsoft.com/en-us/windows/release-health/windows-server-release-info",
+      "https://learn.microsoft.com/en-us/lifecycle/products/windows-server-2012",
+      "https://learn.microsoft.com/en-us/lifecycle/products/windows-server-2012-r2",
+      "https://support.microsoft.com/en-US/servicing/os/windows-server/2026/05/end-of-updates-statement"
+    ],
+    "ubuntu": [
+      "https://ubuntu.com/about/release-cycle",
+      "https://lists.ubuntu.com/archives/ubuntu-announce/2025-July/date.html",
+      "https://lists.ubuntu.com/archives/ubuntu-announce/2026-January/000320.html",
+      "https://lists.ubuntu.com/archives/ubuntu-announce/2026-June/000324.html",
+      "https://endoflife.date/ubuntu"
+    ],
+    "debian": ["https://www.debian.org/releases/", "https://wiki.debian.org/LTS"],
+    "centos": [
+      "https://www.redhat.com/en/topics/linux/centos-linux-eol",
+      "https://www.centos.org/centos-linux-eol/"
+    ],
+    "rhel": ["https://access.redhat.com/support/policy/updates/errata", "https://endoflife.date/rhel"]
+  },
+  "windows_nomes": {
+    "10240": "1507", "10586": "1511", "14393": "1607", "15063": "1703", "16299": "1709",
+    "17134": "1803", "17763": "1809", "18362": "1903", "18363": "1909", "19041": "2004",
+    "19042": "20H2", "19043": "21H1", "19044": "21H2", "19045": "22H2",
+    "22000": "21H2", "22621": "22H2", "22631": "23H2", "26100": "24H2", "26200": "25H2"
+  },
+  "windows_cliente": [
+    {"build": 19044, "nome": "Windows 10 21H2", "fim_home_pro": "2023-06-13", "fim_enterprise": "2024-06-11"},
+    {"build": 19045, "nome": "Windows 10 22H2", "fim_home_pro": "2025-10-14", "fim_enterprise": "2025-10-14", "esu": true},
+    {"build": 22000, "nome": "Windows 11 21H2", "fim_home_pro": "2023-10-10", "fim_enterprise": "2024-10-08"},
+    {"build": 22621, "nome": "Windows 11 22H2", "fim_home_pro": "2024-10-08", "fim_enterprise": "2025-10-14"},
+    {"build": 22631, "nome": "Windows 11 23H2", "fim_home_pro": "2025-11-11", "fim_enterprise": "2026-11-10"},
+    {"build": 26100, "nome": "Windows 11 24H2", "fim_home_pro": "2026-10-13", "fim_enterprise": "2027-10-12"},
+    {"build": 26200, "nome": "Windows 11 25H2", "fim_home_pro": "2027-10-12", "fim_enterprise": "2028-10-10"}
+  ],
+  "windows_ltsc": [
+    {"build": 10240, "edicoes": ["EnterpriseS", "EnterpriseSN"], "nome": "Windows 10 Enterprise LTSB 2015", "fim": "2025-10-14"},
+    {"build": 14393, "edicoes": ["EnterpriseS", "EnterpriseSN"], "nome": "Windows 10 Enterprise LTSB 2016", "fim": "2026-10-13"},
+    {"build": 17763, "edicoes": ["EnterpriseS", "EnterpriseSN"], "nome": "Windows 10 Enterprise LTSC 2019", "fim": "2029-01-09"},
+    {"build": 19044, "edicoes": ["EnterpriseS", "EnterpriseSN"], "nome": "Windows 10 Enterprise LTSC 2021", "fim": "2027-01-12"},
+    {"build": 19044, "edicoes": ["IoTEnterpriseS"], "nome": "Windows 10 IoT Enterprise LTSC 2021", "fim": "2032-01-13"},
+    {"build": 26100, "edicoes": ["EnterpriseS", "EnterpriseSN"], "nome": "Windows 11 Enterprise LTSC 2024", "fim": "2029-10-09"},
+    {"build": 26100, "edicoes": ["IoTEnterpriseS"], "nome": "Windows 11 IoT Enterprise LTSC 2024", "fim": "2034-10-10"}
+  ],
+  "windows_server": [
+    {"build": 9200, "nome": "Windows Server 2012", "fim": "2023-10-10", "esu_fim": "2026-10-13"},
+    {"build": 9600, "nome": "Windows Server 2012 R2", "fim": "2023-10-10", "esu_fim": "2026-10-13"},
+    {"build": 14393, "nome": "Windows Server 2016", "fim": "2027-01-12"},
+    {"build": 17763, "nome": "Windows Server 2019", "fim": "2029-01-09"},
+    {"build": 20348, "nome": "Windows Server 2022", "fim": "2031-10-14"},
+    {"build": 25398, "nome": "Windows Server, versão 23H2", "fim": "2026-05-12"},
+    {"build": 26100, "nome": "Windows Server 2025", "fim": "2034-11-14"}
+  ],
+  "linux": {
+    "ubuntu": {
+      "nome": "Ubuntu",
+      "versoes": {
+        "18.04": {"fim": "2023-05-31", "esm_ate": 2028},
+        "20.04": {"fim": "2025-05-31", "esm_ate": 2030},
+        "22.04": {"fim": "2027-05-31", "esm_ate": 2032},
+        "24.04": {"fim": "2029-05-31", "esm_ate": 2034},
+        "24.10": {"fim": "2025-07-10"},
+        "25.04": {"fim": "2026-01-15"},
+        "25.10": {"fim": "2026-07-09"},
+        "26.04": {"fim": "2031-05-31", "esm_ate": 2036}
+      }
+    },
+    "debian": {
+      "nome": "Debian",
+      "versoes": {
+        "10": {"fim": "2024-06-30"},
+        "11": {"fim": "2026-08-31"},
+        "12": {"fim": "2028-06-30"},
+        "13": {"fim": "2030-06-30"}
+      }
+    },
+    "centos": {
+      "nome": "CentOS Linux",
+      "versoes": {
+        "7": {"fim": "2024-06-30"},
+        "8": {"fim": "2021-12-31"}
+      }
+    },
+    "rhel": {
+      "nome": "Red Hat Enterprise Linux",
+      "versoes": {
+        "7": {"fim": "2024-06-30", "els": true},
+        "8": {"fim": "2029-05-31"},
+        "9": {"fim": "2032-05-31"},
+        "10": {"fim": "2035-05-31"}
+      }
+    }
+  }
+}
