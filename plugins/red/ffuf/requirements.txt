@@ -1,2 +1,0 @@
-# ffuf é um binário de sistema (Go) — sem dependências Python.
-# Instale: sudo apt install ffuf  ·  https://github.com/ffuf/ffuf

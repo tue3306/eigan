@@ -1,1 +1,0 @@
-# trivy é um binário de sistema (Go) — sem dependências Python.

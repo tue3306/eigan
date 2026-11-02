@@ -1,2 +1,0 @@
-# nikto é um binário de sistema (Perl) — instale via apt.
-# https://github.com/sullo/nikto

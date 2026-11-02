@@ -1,2 +1,0 @@
-# Plugin 'httpx': sem dependências Python — usa o binário externo 'httpx'.
-# Instale a ferramenta (ver metadata.yaml) ou rode via sandbox Docker.

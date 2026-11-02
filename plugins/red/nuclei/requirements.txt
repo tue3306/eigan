@@ -1,2 +1,0 @@
-# Plugin 'nuclei': sem dependências Python — usa o binário externo 'nuclei'.
-# Instale a ferramenta (ver metadata.yaml) ou rode via sandbox Docker.

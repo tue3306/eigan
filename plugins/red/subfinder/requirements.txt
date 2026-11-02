@@ -1,2 +1,0 @@
-# Plugin 'subfinder': sem dependências Python — usa o binário externo 'subfinder'.
-# Instale a ferramenta (ver metadata.yaml) ou rode via sandbox Docker.

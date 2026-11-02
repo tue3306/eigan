@@ -1,2 +1,0 @@
-# amass é um binário de sistema (Go/OWASP) — sem dependências Python.
-# https://github.com/owasp-amass/amass

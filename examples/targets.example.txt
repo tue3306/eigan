@@ -1,9 +1,0 @@
-# Alvos de exemplo (um por linha) para: eigan scan --target-list examples/targets.example.txt
-# ⚠️ Só alvos LOCAIS que você controla. Linhas com # são ignoradas.
-# Copie para o seu próprio arquivo e ajuste. O guardrail de escopo bloqueia
-# qualquer alvo que não esteja no seu scope.yaml.
-
-# Laboratório local (suba você mesmo — ver examples/README.md):
-127.0.0.1:3000        # OWASP Juice Shop (docker run ... bkimminich/juice-shop)
-127.0.0.1:8080        # DVWA (seu container local)
-localhost

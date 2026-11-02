@@ -1,1 +1,0 @@
-# ldapsearch faz parte do ldap-utils do sistema — sem dependências Python.

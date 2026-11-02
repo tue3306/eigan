@@ -1,2 +1,0 @@
-# dalfox é um binário de sistema (Go) — sem dependências Python.
-# https://github.com/hahwul/dalfox

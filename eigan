@@ -1,5 +1,0 @@
-#!/usr/bin/env bash
-# Atalho ergonômico:  ./eigan   ==   python3 eigan.py
-# (Após `pip install -e .`, o comando `eigan` também fica disponível no PATH,
-#  igual a nmap/sqlmap/nuclei.) Uso autorizado apenas.
-exec python3 "$(dirname "$(readlink -f "$0")")/eigan.py" "$@"
