@@ -1,0 +1,49 @@
+name: executaveis
+
+# Gera e testa os executáveis de Windows e Linux (PyInstaller, arquivo único).
+# O Python "standalone" do uv exige só glibc 2.17+, então o binário Linux roda
+# em praticamente qualquer distribuição. Os arquivos ficam como artefatos do
+# workflow; anexar a uma release é um passo manual e deliberado.
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  executavel:
+    name: executável (${{ matrix.nome }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            nome: windows-x64
+            python: .venv/Scripts/python.exe
+          - os: ubuntu-latest
+            nome: linux-x64
+            python: .venv/bin/python
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Python standalone e dependências
+        shell: bash
+        run: |
+          python -m pip install uv
+          uv python install 3.12
+          uv venv --python 3.12 --python-preference only-managed .venv
+          uv pip install --python ${{ matrix.python }} . "pyinstaller>=6.6"
+      - name: Gerar e testar o executável
+        shell: bash
+        run: ${{ matrix.python }} packaging/build.py
+      - uses: actions/upload-artifact@v7
+        with:
+          name: eigan-${{ matrix.nome }}
+          path: dist/eigan-*
+          if-no-files-found: error

@@ -1,55 +1,56 @@
 name: ci
+
+# Portão de qualidade em Windows e Linux: formatação, lint, tipos e testes.
+# Tudo offline: os testes sobem servidores locais e nunca tocam a internet.
 on:
   push:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
-  test:
+  testes:
+    name: testes (${{ matrix.os }}, Python ${{ matrix.python }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.11", "3.14"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Instalar
+        run: python -m pip install -e ".[dev]"
+      - name: Formatação (ruff format)
+        run: python -m ruff format --check src tests packaging
+      - name: Lint (ruff)
+        run: python -m ruff check src tests packaging
+      - name: Tipos (mypy)
+        run: python -m mypy src
+      - name: Testes (pytest)
+        run: python -m pytest -q
+
+  # O pacote instalado (sem modo editável) precisa rodar de qualquer pasta.
+  instalacao:
+    name: instalação limpa
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
-      - name: Install
-        run: pip install -e ".[dev]"
-      - name: Lint
-        run: ruff check src plugins tests evals
-      - name: Format
-        run: ruff format --check src plugins tests evals
-      - name: Type-check
-        run: mypy src
-      - name: Tests
-        run: pytest -q --cov=eigan --cov-report=term-missing
-      - name: Evals (decisão do agente §3.1 — offline, sem chave/rede)
-        run: pytest evals -q
-
-  # Valida a INSTALAÇÃO em ambiente limpo (Missão 5 / §13): instala o pacote e
-  # roda os pontos de entrada sem erro — o produto tem que "baixar e rodar".
-  smoke-install:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.11"
-      - name: Instalar pacote (sem extras)
-        run: pip install .
-      - name: Versão
-        run: eigan --version
-      - name: Doctor (diagnóstico do ambiente — deve sair 0)
-        run: eigan doctor
-      - name: Planner dry-run (núcleo cognitivo, não executa nada)
-        run: eigan plan example.com --goal attack-surface
-
-  # Exemplo de gate de segurança em CI: o próprio EIGAN falha o pipeline se
-  # houver findings acima do limiar (contra um alvo de teste LOCAL autorizado).
-  # Descomente e forneça um scope.yaml + alvo local vulnerável (DVWA/Juice Shop).
-  #
-  # scan-gate:
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v7
-  #     - run: pip install -e .
-  #     - run: eigan scan 127.0.0.1 --scope scope.yaml --yes --fail-on high
+      - name: Instalar o pacote
+        run: python -m pip install .
+      - name: Versão e checagens
+        working-directory: /tmp
+        run: |
+          eigan --versao
+          eigan checagens > /dev/null
+      - name: Auditoria da própria pasta do projeto
+        working-directory: /tmp
+        run: eigan auditar "$GITHUB_WORKSPACE/src" --tipo projeto --formatos json --saida /tmp/relatorio
