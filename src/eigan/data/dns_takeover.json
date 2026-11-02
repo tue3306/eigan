@@ -1,0 +1,50 @@
+{
+  "fonte": "can-i-take-over-xyz — EdOverflow e colaboradores (fingerprints.json), mais Microsoft Learn para os serviços do Azure",
+  "url": "https://github.com/EdOverflow/can-i-take-over-xyz",
+  "dados": "https://raw.githubusercontent.com/EdOverflow/can-i-take-over-xyz/master/fingerprints.json",
+  "referencias": [
+    "https://learn.microsoft.com/en-us/azure/security/fundamentals/subdomain-takeover",
+    "https://learn.microsoft.com/en-us/azure/app-service/reference-dangling-subdomain-prevention",
+    "https://learn.microsoft.com/en-us/azure/cdn/classic-cdn-retirement-faq",
+    "https://learn.microsoft.com/en-us/azure/frontdoor/classic-retirement-faq",
+    "https://learn.microsoft.com/en-us/previous-versions/azure/cloud-services/cloud-services-choose-me",
+    "https://docs.aws.amazon.com/AmazonS3/latest/userguide/WebsiteEndpoints.html"
+  ],
+  "licenca": "CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). Adaptado de can-i-take-over-xyz: só os serviços com status \"Vulnerable\" que têm CNAME conhecido, campos renomeados e restrições de formato acrescentadas a partir da documentação dos provedores.",
+  "atualizado": "2026-11-02",
+  "obs": "'cname' é comparado como sufixo do destino do CNAME. 'nxdomain': a prova é o destino não existir; sem isso, a prova é a 'assinatura' na página do subdomínio ('regex' diz se ela é expressão regular). 'rotulos': quantos rótulos antes do sufixo um nome precisa ter para que outra conta consiga recriá-lo (formatos mais longos trazem identificador único). 'cname_regex': filtro extra do destino. 'verificacao_txt': TXT '<nome>.<subdomínio>' que impede a tomada. Ficaram de fora: os 'Edge case' e 'Not vulnerable' da fonte (GitHub, Heroku, Shopify, Netlify, Vercel, Wix, Webflow, Tumblr, CloudFront, Fastly, Zendesk, Firebase...), os 'Vulnerable' sem CNAME na fonte (Pantheon, Readthedocs, Cargo, Canny, Short.io...) e os cuja prova é só o código HTTP (Helprace, LaunchRock). 'sem_reivindicacao' lista sufixos que a fonte ainda cita, mas cujo provedor não permite mais criar o nome: destino inexistente neles é só CNAME órfão.",
+  "servicos": [
+    {"servico": "AWS S3", "cname": ["amazonaws.com"], "cname_regex": "\\.s3[.-]([a-z0-9-]+\\.)*amazonaws\\.com$", "nxdomain": false, "assinatura": "The specified bucket does not exist", "regex": false},
+    {"servico": "AWS Elastic Beanstalk", "cname": ["elasticbeanstalk.com"], "rotulos": [1, 2], "nxdomain": true, "assinatura": null, "regex": false},
+    {"servico": "Microsoft Azure App Service", "cname": ["azurewebsites.net"], "rotulos": [1], "nxdomain": true, "assinatura": null, "regex": false, "verificacao_txt": "asuid"},
+    {"servico": "Microsoft Azure (IP público)", "cname": ["cloudapp.azure.com"], "rotulos": [2], "nxdomain": true, "assinatura": null, "regex": false},
+    {"servico": "Microsoft Azure", "cname": ["blob.core.windows.net", "azure-api.net", "azurehdinsight.net", "database.windows.net", "azuredatalakestore.net", "search.windows.net", "redis.cache.windows.net", "servicebus.windows.net", "visualstudio.com", "trafficmanager.net"], "rotulos": [1], "nxdomain": true, "assinatura": null, "regex": false},
+    {"servico": "Bitbucket", "cname": ["bitbucket.io"], "nxdomain": false, "assinatura": "Repository not found", "regex": false},
+    {"servico": "Ghost", "cname": ["ghost.io"], "nxdomain": false, "assinatura": "Site unavailable\\.|Failed to resolve DNS path for this host", "regex": true},
+    {"servico": "Surge.sh", "cname": ["surge.sh"], "nxdomain": false, "assinatura": "project not found", "regex": false},
+    {"servico": "WordPress.com", "cname": ["wordpress.com"], "nxdomain": false, "assinatura": "Do you want to register [A-Za-z0-9-]{1,63}\\.wordpress\\.com\\?", "regex": true},
+    {"servico": "Readme.io", "cname": ["readme.io"], "nxdomain": false, "assinatura": "The creators of this project are still working on making everything perfect!", "regex": false},
+    {"servico": "Ngrok", "cname": ["ngrok.io"], "nxdomain": false, "assinatura": "Tunnel [A-Za-z0-9.-]{1,100}\\.ngrok\\.io not found", "regex": true},
+    {"servico": "Discourse", "cname": ["trydiscourse.com"], "rotulos": [1], "nxdomain": true, "assinatura": null, "regex": false},
+    {"servico": "Strikingly", "cname": ["s.strikinglydns.com"], "nxdomain": false, "assinatura": "PAGE NOT FOUND.", "regex": false},
+    {"servico": "HatenaBlog", "cname": ["hatenablog.com"], "nxdomain": false, "assinatura": "404 Blog is not found", "regex": false},
+    {"servico": "Help Juice", "cname": ["helpjuice.com"], "nxdomain": false, "assinatura": "We could not find what you're looking for.", "regex": false},
+    {"servico": "Help Scout", "cname": ["helpscoutdocs.com"], "nxdomain": false, "assinatura": "No settings were found for this company:", "regex": false},
+    {"servico": "JetBrains YouTrack", "cname": ["youtrack.cloud"], "nxdomain": false, "assinatura": "is not a registered InCloud YouTrack", "regex": false},
+    {"servico": "UptimeRobot", "cname": ["stats.uptimerobot.com"], "nxdomain": false, "assinatura": "page not found", "regex": false},
+    {"servico": "Agile CRM", "cname": ["agilecrm.com"], "nxdomain": false, "assinatura": "Sorry, this page is no longer available.", "regex": false},
+    {"servico": "Airee.ru", "cname": ["airee.ru"], "nxdomain": false, "assinatura": "Ошибка 402. Сервис Айри.рф не оплачен", "regex": false},
+    {"servico": "Anima", "cname": ["animaapp.io"], "nxdomain": false, "assinatura": "The page you were looking for does not exist.", "regex": false},
+    {"servico": "Gemfury", "cname": ["furyns.com"], "nxdomain": false, "assinatura": "404: This page could not be found.", "regex": false},
+    {"servico": "SurveySparrow", "cname": ["surveysparrow.com"], "nxdomain": false, "assinatura": "Account not found.", "regex": false},
+    {"servico": "Uberflip", "cname": ["read.uberflip.com"], "nxdomain": false, "assinatura": "The URL you've accessed does not provide a hub.", "regex": false},
+    {"servico": "Worksites", "cname": ["worksites.net"], "nxdomain": false, "assinatura": "Hello! Sorry, but the website you&rsquo;re looking for doesn&rsquo;t exist.", "regex": false}
+  ],
+  "sem_reivindicacao": [
+    {"cname": ["azureedge.net"], "motivo": "o Azure CDN Standard from Microsoft (classic) não aceita mais a criação de perfis e será aposentado em 30/09/2027"},
+    {"cname": ["azurefd.net"], "motivo": "o Azure Front Door (classic) não aceita mais a criação de perfis e será aposentado em 31/03/2027"},
+    {"cname": ["cloudapp.net"], "motivo": "o Cloud Services (classic) foi aposentado em 31/08/2024"},
+    {"cname": ["azurecontainer.io"], "motivo": "o Azure Container Instances gera o nome com um hash do tenant por padrão, que outra conta não consegue recriar (confirme no portal da Microsoft)"},
+    {"cname": ["azurecr.io"], "motivo": "o Azure Container Registry pode usar escopo de rótulo de nome (nome-hash.azurecr.io) e reserva o nome por um período, então outra conta nem sempre consegue recriá-lo"}
+  ]
+}
