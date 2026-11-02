@@ -442,9 +442,12 @@ def explicit(number: int, value: bytes) -> bytes:
 
 def der_time(moment: datetime) -> bytes:
     """UTCTime até 2049 e GeneralizedTime depois, como manda a RFC 5280."""
+    # Sem strftime no ano: no Windows com Python 3.11, "%y" recusa anos antes de 1900.
+    resto = f"{moment.month:02d}{moment.day:02d}{moment.hour:02d}"
+    resto += f"{moment.minute:02d}{moment.second:02d}Z"
     if moment.year < 2050:
-        return der(0x17, moment.strftime("%y%m%d%H%M%SZ").encode("ascii"))
-    return der(0x18, moment.strftime("%Y%m%d%H%M%SZ").encode("ascii"))
+        return der(0x17, f"{moment.year % 100:02d}{resto}".encode("ascii"))
+    return der(0x18, f"{moment.year:04d}{resto}".encode("ascii"))
 
 
 def name(cn: str | None = None, org: str | None = None) -> bytes:
