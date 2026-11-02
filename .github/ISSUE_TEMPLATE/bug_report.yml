@@ -1,60 +1,58 @@
-name: "🐛 Bug report"
-description: Reportar um comportamento incorreto do EIGAN (não use para vulnerabilidades de segurança).
-labels: ["bug", "triage"]
+name: "Erro no EIGAN"
+description: Algo no EIGAN não funcionou como esperado (não use para vulnerabilidades do próprio EIGAN).
+labels: ["bug", "triagem"]
 body:
   - type: markdown
     attributes:
       value: |
-        Obrigado por reportar! ⚠️ **Vulnerabilidade de segurança no EIGAN?**
-        Não abra Issue pública — siga o [SECURITY.md](../security/policy).
+        Obrigado por reportar. **Encontrou uma vulnerabilidade no próprio EIGAN?**
+        Não abra issue pública: siga o [SECURITY.md](../security/policy).
   - type: checkboxes
     id: preflight
     attributes:
-      label: Pré-checagem
+      label: Antes de enviar
       options:
-        - label: Rodei `eigan doctor` e li a saída.
+        - label: Procurei issues abertas e não encontrei uma igual.
           required: true
-        - label: Procurei Issues existentes e não encontrei duplicata.
-          required: true
-        - label: Isto não é uma vulnerabilidade de segurança (essas vão pelo SECURITY.md).
+        - label: Não incluí endereços de terceiros, senhas, tokens ou dados pessoais.
           required: true
   - type: textarea
     id: what-happened
     attributes:
       label: O que aconteceu?
-      description: Descreva o bug e o que você esperava que acontecesse.
-      placeholder: Ao rodar `eigan scan ...`, esperava X mas obtive Y.
+      description: O que você fez, o que esperava e o que viu.
+      placeholder: Ao auditar uma pasta de projeto pelo painel, esperava X mas apareceu Y.
     validations:
       required: true
   - type: textarea
     id: repro
     attributes:
-      label: Passos para reproduzir
-      description: Comando exato e contexto. **Não inclua alvos de terceiros nem segredos.**
+      label: Como reproduzir
+      description: Passos ou comando exato. Use apenas alvos locais ou que você administra.
       placeholder: |
-        1. eigan scan --target localhost --perspective internal ...
-        2. ...
+        eigan auditar ./meu-projeto --tipo projeto
       render: shell
     validations:
       required: true
   - type: textarea
-    id: doctor
+    id: log
     attributes:
-      label: Saída do `eigan doctor`
-      render: shell
+      label: Trecho do log
+      description: O caminho do log aparece na tela "Sobre" do painel. Revise antes de colar.
+      render: text
     validations:
       required: false
   - type: input
     id: version
     attributes:
       label: Versão do EIGAN
-      placeholder: "0.2.0 (ou commit)"
+      placeholder: "saída de: eigan --versao"
     validations:
       required: true
   - type: input
     id: env
     attributes:
-      label: Ambiente
-      placeholder: "Ex.: Kali Linux, Python 3.11, instalação via pip / Docker"
+      label: Sistema
+      placeholder: "Ex.: Windows 11 com o executável, Ubuntu 24.04 com pip"
     validations:
       required: true

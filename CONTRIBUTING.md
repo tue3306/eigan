@@ -1,95 +1,85 @@
 # Contribuindo com o EIGAN
 
-Obrigado por querer contribuir! O EIGAN é uma plataforma modular de operações
-de segurança (Red/Blue/Purple). Este guia mostra como preparar o ambiente,
-manter o padrão de qualidade e — o mais importante — **adicionar um plugin em
-~5 minutos** sem tocar no Core.
+Obrigado pelo interesse. O EIGAN é um auditor de segurança defensivo: encontra
+problemas e explica como corrigir. Este guia mostra como preparar o ambiente,
+rodar o portão de qualidade e escrever uma checagem nova.
 
-> ⚠️ Antes de qualquer coisa, leia o [Código de Conduta](CODE_OF_CONDUCT.md) e o
-> [aviso legal de uso autorizado](README.md#-aviso-legal). Contribuições que
-> incentivem uso não autorizado serão recusadas.
+Leia também o [Código de Conduta](CODE_OF_CONDUCT.md). Contribuições que
+incentivem uso não autorizado ou técnicas ofensivas serão recusadas.
 
-## Ambiente de desenvolvimento
+## Ambiente
 
-Requer **Python 3.11+**.
+Requer Python 3.11 ou mais novo.
 
 ```bash
-git clone https://github.com/tue3306/EIGAN.git
-cd EIGAN
-python -m venv .venv && source .venv/bin/activate
-pip install -e ".[pdf,ai,dev]"
-eigan doctor          # confere ambiente, ferramentas, IA e feeds
+git clone https://github.com/tue3306/eigan.git
+cd eigan
+python -m venv .venv
 ```
 
-## Definition of Done (obrigatório antes do PR)
-
-Um PR só está pronto quando **tudo** abaixo passa localmente:
+Ative o ambiente (`source .venv/bin/activate` no Linux, `.venv\Scripts\activate`
+no Windows) e instale em modo de desenvolvimento:
 
 ```bash
-ruff format .                       # format
-ruff check src plugins tests        # lint
-mypy src                            # type-check
-pytest -q                           # testes (unit + integração local)
+pip install -e ".[dev]"
 ```
 
-Sem código morto, sem `TODO` órfão, sem segredo commitado. Documentação do
-módulo/plugin atualizada. Commits pequenos e descritivos (padrão
-[Conventional Commits](https://www.conventionalcommits.org/), ex.:
-`feat(red): plugin ffuf para content discovery`).
+## Portão de qualidade
 
-## Adicionar um plugin em ~5 minutos
+Um PR só está pronto quando os quatro passos passam:
 
-O Core faz **auto-discovery** por `metadata.yaml` (ADR-0001/0003): você **não
-edita o Core** para somar uma ferramenta — cria uma pasta.
+```bash
+ruff format --check src tests packaging
+ruff check src tests packaging
+mypy src
+pytest -q
+```
 
-1. Copie o esqueleto de um plugin existente da mesma categoria:
-   ```bash
-   cp -r plugins/red/naabu plugins/red/masscan
-   ```
-2. Edite `metadata.yaml` (nome, `capabilities`, `supported_perspectives`,
-   `tool`, `version_source` com `# VERIFICAR`, `license`, `commercial_use`,
-   `install_hint`).
-3. Implemente `runner.py` (subprocess seguro — **lista de argumentos, nunca
-   `shell=True`**) e `parser.py` (normaliza a saída para o schema de `Finding`).
-4. Adicione `tests/test_parser.py` com **fixture de saída real** da ferramenta.
-5. Rode `eigan doctor` — o plugin aparece descoberto; `pytest -q` deve passar.
+`ruff check` não confere formatação; rode os dois. Os testes são offline: sobem
+servidores locais e nunca acessam alvos de terceiros.
 
-Detalhes e contrato completo: `plugins/README.md` e `docs/architecture.md`.
+## Escrevendo uma checagem
 
-### Módulo ainda não implementado? Scaffold honesto, nunca stub falso
+O guia completo está em [docs/escrevendo-checagens.md](docs/escrevendo-checagens.md).
+Em resumo:
 
-Módulos fora do MVP entram como **scaffold honesto**: `metadata.yaml` com
-`roadmap: true` + `docs/` + teste marcado `roadmap`. Eles são descobertos e
-listados, mas **não fingem executar**. Nunca faça um stub que simula resultado.
+1. Crie a entrada na base de conhecimento (`KBEntry`) com explicação, risco,
+   passos, exemplos de correção, como verificar e referências reais.
+2. Escreva a função com `@check`, declarando o fato que ela consome e todos os
+   achados que pode reportar.
+3. Adicione testes com um servidor ou arquivo local que reproduza o caso
+   vulnerável e o caso corrigido.
 
-## Regras inegociáveis (não afrouxáveis em PR)
+Regras que não se negociam:
 
-Princípios de segurança e veracidade do projeto (a decisão por trás de cada um
-está registrada nos [ADRs](docs/adr/)):
+- **Só observar.** Nada de explorar, forçar senha, causar indisponibilidade ou
+  alterar dados do alvo.
+- **Nada inventado.** CVE, faixa de versão, data de fim de suporte e chave de
+  registro precisam de referência verificável.
+- **Offline e sem IA.** Dados de apoio ficam em `src/eigan/data/` com origem e
+  licença em `FONTES.md`.
+- **Segredos mascarados** em telas, relatórios e logs.
+- **Windows e Linux.** `pathlib`, nunca `shell=True`, comandos externos com lista
+  de argumentos e tempo limite.
 
-1. **Anti-invenção:** CVE/CVSS/EPSS/KEV/versão/licença não verificados saem
-   `UNVERIFIED` — nunca fabricados.
-2. **Autorização sempre presente:** guardrail de escopo e consent gate não são
-   removidos, no máximo simplificados.
-3. **A IA planeja, decide e comanda o scan**, mas a execução real passa por
-   *plumbing* seguro e pelo gate de escopo — a IA nunca spawna processo nem
-   opera fora do escopo autorizado, nem afirma fato fora das evidências.
-4. **A IA é obrigatória (AI-native, tudo-ou-nada):** sem um provedor configurado,
-   o scan é recusado com erro acionável — não existe "modo sem IA" ([ADR-0012](docs/adr/0012-ai-native-mandatory.md)).
-5. **Segurança de código:** sem `shell=True`, sem concatenar comando, sem
-   secret no repo, validação/sanitização sempre.
+## Gerar o executável
+
+```bash
+pip install -e ".[build]"
+python packaging/build.py
+```
+
+O executável e o arquivo `.sha256` ficam em `dist/`. O script também roda um
+teste de fumaça (versão, auditoria de pasta com os cinco relatórios e o painel).
 
 ## Fluxo de PR
 
-1. Faça fork e crie um branch a partir de `main` (`feat/...`, `fix/...`).
-2. Garanta a DoD verde e atualize o `CHANGELOG.md` (seção *Unreleased*).
-3. Abra o PR preenchendo o template; descreva o *porquê*, não só o *o quê*.
-4. Um mantenedor revisa; discussões técnicas são bem-vindas.
+1. Crie um branch a partir de `main`.
+2. Rode o portão de qualidade e atualize o `CHANGELOG.md` (seção "Não lançado").
+3. Abra o PR pelo template, explicando o porquê da mudança.
 
-## Reportar bugs e vulnerabilidades
+## Bugs e vulnerabilidades
 
-- Bug funcional → abra uma Issue pelo template.
-- **Vulnerabilidade de segurança no próprio EIGAN** → **não** abra Issue
-  pública; siga o [SECURITY.md](SECURITY.md).
-
-Dúvidas de arquitetura? Veja `docs/architecture.md` e os ADRs em `docs/adr/`.
+- Erro de funcionamento: abra uma issue pelo template.
+- Vulnerabilidade no próprio EIGAN: não abra issue pública, siga o
+  [SECURITY.md](SECURITY.md).

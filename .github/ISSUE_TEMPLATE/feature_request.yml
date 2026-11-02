@@ -1,49 +1,43 @@
-name: "✨ Feature request / novo plugin"
-description: Sugerir uma capability, plugin ou melhoria.
-labels: ["enhancement"]
+name: "Sugestão de checagem ou melhoria"
+description: Sugerir uma nova checagem de segurança, um relatório ou uma melhoria no painel.
+labels: ["melhoria"]
 body:
   - type: markdown
     attributes:
       value: |
-        Pensa em capacidades, não só em ferramentas. Se for um **novo plugin**,
-        veja como adicionar um em ~5 min no [CONTRIBUTING.md](../blob/main/CONTRIBUTING.md).
+        Uma checagem nova precisa ser **não intrusiva** (observar, nunca explorar) e vir com
+        a explicação de como corrigir. Veja [docs/escrevendo-checagens.md](../blob/main/docs/escrevendo-checagens.md).
   - type: dropdown
     id: kind
     attributes:
       label: Tipo
       options:
-        - Novo plugin (ferramenta para uma capability existente)
-        - Nova capability
-        - Melhoria no Core Engine (pipeline, risco, correlação)
-        - Relatório / dashboard / API
-        - Documentação / DX
+        - Nova checagem
+        - Explicação ou correção de uma checagem existente
+        - Relatório (HTML, PDF, JSON, SARIF, CSV)
+        - Painel ou linha de comando
+        - Documentação
         - Outro
     validations:
       required: true
   - type: dropdown
-    id: domain
+    id: area
     attributes:
-      label: Domínio
-      options: ["Red", "Blue", "Purple", "Core/Plataforma", "N/A"]
+      label: Área
+      options: ["Site ou aplicação web", "Servidor ou rede", "Esta máquina", "Pasta de projeto", "Logs", "Geral"]
     validations:
       required: true
   - type: textarea
     id: problem
     attributes:
-      label: Problema / motivação
-      description: Que dor isso resolve? Qual pergunta Outside-In / Inside-Out ajuda a responder?
+      label: Problema
+      description: Que risco isso ajuda a encontrar ou corrigir?
     validations:
       required: true
   - type: textarea
     id: proposal
     attributes:
       label: Proposta
-      description: Comportamento esperado. Se envolve uma ferramenta, cite-a e sua licença/uso comercial (sem inventar — marcaremos `VERIFICAR`).
+      description: Como detectar (sem explorar), como corrigir e fontes de referência (CIS, OWASP, documentação oficial).
     validations:
       required: true
-  - type: textarea
-    id: alternatives
-    attributes:
-      label: Alternativas consideradas
-    validations:
-      required: false

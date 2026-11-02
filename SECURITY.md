@@ -1,54 +1,64 @@
 # Política de Segurança
 
-O EIGAN é uma ferramenta de segurança; levamos a segurança **do próprio
-produto** a sério (é o item nº 2 da nossa precedência de decisão, atrás apenas de
-legalidade).
+O EIGAN é uma ferramenta de segurança, então a segurança do próprio EIGAN vem
+antes de qualquer recurso novo.
 
 ## Versões suportadas
 
-O projeto está em desenvolvimento ativo (pré-alfa, `0.0.0`) — **ainda não há
-releases publicadas**. Correções de segurança são aplicadas sobre o branch `main`,
-a única linha suportada até a primeira release.
+O projeto está em pré-lançamento (`0.0.0`). Correções de segurança entram no
+branch `main`, a única linha suportada até a primeira versão estável.
 
 | Versão | Suportada |
 |--------|-----------|
-| `0.0.0` (pré-alfa, `main`) | ✅ |
+| `0.0.0` (pré-lançamento, `main`) | sim |
 
 ## Como reportar uma vulnerabilidade
 
-**Não abra uma Issue pública** para vulnerabilidades de segurança.
+Não abra issue pública.
 
-1. **Preferencial:** use o [GitHub Private Vulnerability Reporting][ghsa]
-   (aba *Security* → *Report a vulnerability*) do repositório.
-2. **Alternativa:** e-mail para **hoffmann3701@gmail.com** com o assunto
+1. Preferencial: [reporte privado de vulnerabilidade do GitHub][ghsa]
+   (aba Security, "Report a vulnerability").
+2. Alternativa: e-mail para **hoffmann3701@gmail.com** com o assunto
    `[EIGAN Security]`.
 
-Inclua, se possível: descrição, versão afetada, passos de reprodução, impacto
-estimado e qualquer PoC. Pedimos que você **não divulgue publicamente** até
-coordenarmos uma correção.
+Inclua, se possível: descrição, versão, passos para reproduzir e impacto. Pedimos
+que não divulgue publicamente até a correção.
 
 ### O que esperar
 
-- **Confirmação de recebimento:** em até 72 horas.
-- **Avaliação inicial e triagem:** em até 7 dias.
-- **Correção e divulgação coordenada:** conforme severidade; creditamos quem
-  reportar, salvo pedido de anonimato.
+- Confirmação de recebimento em até 72 horas.
+- Avaliação inicial em até 7 dias.
+- Correção e divulgação coordenada conforme a gravidade, com crédito a quem
+  reportou (salvo pedido de anonimato).
 
 ## Escopo
 
-Em escopo: código do EIGAN (Core Engine, plugins oficiais, API, CLI,
-dashboard) que possa levar a execução indevida, vazamento de dados, escape de
-sandbox, injeção de comando ou bypass do guardrail de escopo/consent.
+Em escopo, por exemplo:
 
-Fora de escopo: vulnerabilidades em ferramentas de terceiros que o EIGAN
-apenas orquestra (reporte-as ao projeto de origem) e resultados de scans que você
-executou nos **seus próprios** alvos.
+- o painel aceitar requisições de outra origem, de outro host ou sem o token;
+- leitura de arquivos fora das pastas permitidas pelo painel;
+- execução de comandos a partir de dados do alvo (cabeçalhos, banners, arquivos
+  de log, conteúdo de projetos);
+- relatórios que executem script ao serem abertos (XSS no HTML);
+- segredos encontrados aparecendo sem máscara em telas, relatórios ou logs;
+- uma checagem que altere o alvo ou cause indisponibilidade.
 
-## Uso responsável e legal
+Fora de escopo: problemas em sistemas que você auditou com o EIGAN (reporte ao
+responsável por eles) e o uso do EIGAN contra alvos sem autorização.
 
-O EIGAN só deve ser usado contra sistemas que você **possui ou tem
-autorização escrita** para testar. O produto bloqueia por padrão alvos fora do
-`scope.yaml` e exige confirmação de autorização — **não** contorne esses
-controles. Uso não autorizado é ilegal e de sua inteira responsabilidade.
+## Modelo de segurança do painel
+
+- Escuta somente em `127.0.0.1`.
+- Token aleatório por execução, exigido em toda chamada da API.
+- Cabeçalho `Host` conferido (contra DNS rebinding) e `Origin` conferido em
+  métodos que alteram estado.
+- Política de conteúdo restritiva (`default-src 'self'`) e nenhum recurso
+  externo.
+
+## Uso responsável
+
+Use o EIGAN apenas em sistemas que você administra ou tem autorização por
+escrito para avaliar. As checagens só observam, mas mesmo uma varredura de portas
+sem autorização pode ser ilegal.
 
 [ghsa]: https://docs.github.com/pt/code-security/security-advisories/guidance-on-reporting-and-writing-information-about-vulnerabilities/privately-reporting-a-security-vulnerability

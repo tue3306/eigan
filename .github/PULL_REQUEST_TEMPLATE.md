@@ -1,39 +1,26 @@
-<!-- Obrigado por contribuir! Preencha o essencial; PRs pequenos e focados são revisados mais rápido. -->
+<!-- Obrigado por contribuir! PRs pequenos e focados são revisados mais rápido. -->
 
 ## O que muda e por quê
 
-<!-- Descreva o *porquê*, não só o *o quê*. Link para a Issue: Closes #___ -->
+<!-- Descreva o porquê, não só o quê. Issue relacionada: Closes #___ -->
 
-## Tipo
+## Checklist
 
-- [ ] `feat` — nova funcionalidade / plugin
-- [ ] `fix` — correção de bug
-- [ ] `docs` — documentação
-- [ ] `refactor` / `perf` / `test` / `chore`
-
-## Definition of Done
-
-- [ ] `ruff format .` e `ruff check src plugins tests` limpos
+- [ ] `ruff format --check src tests packaging` e `ruff check src tests packaging` limpos
 - [ ] `mypy src` sem erros
-- [ ] `pytest -q` verde (inclui teste novo cobrindo a mudança)
-- [ ] Documentação do módulo/plugin atualizada
-- [ ] `CHANGELOG.md` atualizado (seção *Unreleased*)
-- [ ] Sem código morto, sem segredo commitado
+- [ ] `pytest -q` verde, com teste novo cobrindo a mudança
+- [ ] `CHANGELOG.md` atualizado (seção "Não lançado")
 
-## Inegociáveis (confirmo que o PR respeita)
+## Regras do projeto (confirmo que o PR respeita)
 
-- [ ] **Anti-invenção:** nenhum CVE/CVSS/EPSS/KEV/versão/licença fabricado (não
-      verificado ⇒ `UNVERIFIED`)
-- [ ] **Autorização:** guardrail de escopo / consent gate não removidos
-- [ ] **IA:** não executa scanner nem descobre vuln; todo recurso de IA tem
-      fallback determinístico
-- [ ] **Segurança de código:** sem `shell=True`, sem concatenar comando, sem
-      secret no repo; validação/sanitização presentes
-- [ ] Módulo não implementado entra como **scaffold honesto**, não stub falso
+- [ ] Checagens só observam: nada de explorar, forçar senha ou alterar o alvo
+- [ ] Todo achado novo tem explicação, passos de correção e referência na base de conhecimento
+- [ ] Nenhum CVE, versão ou referência inventada
+- [ ] Segredos sempre mascarados em telas, relatórios e logs
+- [ ] Sem `shell=True`, sem chave de API e sem dependência de serviço externo para funcionar
+- [ ] Testes rodam offline (servidores locais, nada de alvos de terceiros)
 
 ## Como testar
-
-<!-- Comando(s) exato(s) para o revisor validar. Use apenas alvos locais/autorizados. -->
 
 ```bash
 ```
