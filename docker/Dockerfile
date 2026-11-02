@@ -1,29 +1,26 @@
-# Imagem da aplicação EIGAN (API/CLI). As ferramentas externas de scan
-# rodam idealmente em containers efêmeros próprios (sandbox); esta imagem traz
-# o núcleo Python + WeasyPrint. Ver docker-compose.yml.
-FROM python:3.11-slim
+# Imagem do EIGAN para pipelines (CI/CD) e servidores sem interface gráfica.
+#
+#   docker build -f docker/Dockerfile -t eigan .
+#   docker run --rm -v "$PWD:/alvo:ro" eigan auditar /alvo --tipo projeto
+#   docker run --rm eigan auditar https://staging.seu-dominio.com.br --sim --falhar-em alta
+#
+# O painel web só escuta em 127.0.0.1 (por segurança), então dentro do container
+# use a linha de comando. Relatórios vão para /dados (monte um volume para guardá-los).
+FROM python:3.12-slim
 
-# Dependências de sistema do WeasyPrint (render PDF) — versões resolvidas pelo
-# apt da distro base (não fixadas de memória).
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpango-1.0-0 libpangocairo-1.0-0 libgdk-pixbuf-2.0-0 libffi-dev \
-    && rm -rf /var/lib/apt/lists/*
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    EIGAN_HOME=/dados
 
 WORKDIR /app
-COPY pyproject.toml README.md ./
+COPY pyproject.toml README.md LICENSE ./
 COPY src/ ./src/
-COPY config/ ./config/
-COPY knowledge/ ./knowledge/
-
-RUN pip install --no-cache-dir ".[pdf]"
+RUN pip install --no-cache-dir . && rm -rf /app/src
 
 # Menor privilégio: não roda como root.
-RUN useradd -m eigan
+RUN useradd --create-home --uid 10001 eigan && mkdir -p /dados && chown eigan:eigan /dados
 USER eigan
+VOLUME ["/dados"]
 
-EXPOSE 8000
-# Exposto na rede (--expose → 0.0.0.0): a API EXIGE o token do EIGAN (ADR-0014).
-# Defina EIGAN_API_TOKEN no ambiente do container (docker-compose/`-e`); se ausente,
-# o EIGAN gera um e o imprime no log de inicialização. Sem token, toda /api/v1 → 401.
 ENTRYPOINT ["eigan"]
-CMD ["serve", "--expose"]
+CMD ["--ajuda"]

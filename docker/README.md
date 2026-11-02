@@ -1,29 +1,38 @@
-# docker/ — Empacotamento e sandbox
+# docker/
 
-Docker é o caminho **preferido** (CLAUDE.md §15): cada ferramenta externa roda
-em container efêmero (sandbox), evitando poluir o host e aplicando menor
-privilégio.
+Imagem do EIGAN para rodar auditorias em pipelines (CI/CD) e servidores sem
+interface gráfica. Para uso no dia a dia, prefira o executável da página de
+releases: ele abre o painel no navegador.
 
-## Subir tudo
+## Gerar a imagem
 
 ```bash
-docker compose -f docker/docker-compose.yml up --build
+docker build -f docker/Dockerfile -t eigan .
 ```
 
-Isso sobe a API + dashboard (`eigan serve`) e imprime a URL. Para **escanear** é
-preciso um provedor de IA (o EIGAN é AI-native, [ADR-0012](../docs/adr/0012-ai-native-mandatory.md)):
-use Ollama local (sem chave, sem custo) ou uma chave de nuvem.
+## Exemplos
 
-## Arquivos
+Auditar o código de um projeto (somente leitura):
 
-- `Dockerfile` — imagem do EIGAN (Python 3.11+, instala o pacote e extras).
-- `docker-compose.yml` — serviço da aplicação; ponto de extensão para adicionar
-  um **alvo de teste local** (DVWA / Juice Shop) e um Postgres opcional.
+```bash
+docker run --rm -v "$PWD:/alvo:ro" eigan auditar /alvo --tipo projeto
+```
 
-## Alvo de teste local
+Auditar um site de homologação que você administra e falhar o pipeline se houver
+achado de risco alto ou crítico:
 
-Para experimentar com valor real **sem tocar em produção**, rode um alvo
-vulnerável local (ex.: `bkimminich/juice-shop`) na mesma rede do compose e
-escaneie-o com perspectiva `internal`. Veja [../examples/README.md](../examples/README.md).
+```bash
+docker run --rm -v "$PWD/relatorios:/dados" eigan auditar https://staging.seu-dominio.com.br --sim --falhar-em alta
+```
 
-> ⚠️ Só escaneie alvos que você controla. O guardrail de escopo bloqueia o resto.
+Os relatórios (HTML, PDF e JSON) ficam em `/dados/relatorios` dentro do
+container; monte um volume em `/dados` para guardá-los.
+
+## Observações
+
+- O painel web escuta só em `127.0.0.1` por segurança, por isso a imagem é
+  pensada para a linha de comando.
+- A auditoria de "esta máquina" dentro de um container avalia o próprio
+  container, não o servidor hospedeiro.
+- Audite apenas sistemas que você administra ou tem autorização por escrito
+  para avaliar.
