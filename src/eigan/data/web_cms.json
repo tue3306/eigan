@@ -1,0 +1,253 @@
+{
+  "fonte": "Curadoria própria do EIGAN a partir de fontes oficiais: NVD (faixas de versão), api.wordpress.org e wordpress.org (versões e política de suporte), drupal.org (ciclo de vida), código e API de downloads do Joomla (datas de fim de suporte e versões), listadas em cada item.",
+  "licenca": "Apache-2.0 (mesma licença do EIGAN). Versões, datas e faixas são fatos públicos compilados das fontes citadas; os resumos em português foram escritos pelo EIGAN. Dados do NVD são de domínio público.",
+  "url": "https://nvd.nist.gov/",
+  "atualizado": "2026-11-02",
+  "_obs": "Só entram CVEs do núcleo dos CMS que estão no catálogo CISA KEV (kev.json). 'de' é inclusivo, 'antes_de' é exclusivo e 'ate' é inclusivo, como no NVD. 'fim_de_suporte' vale para versões menores que 'antes_de', em ordem crescente; 'data' no futuro significa que a série ainda tem suporte. 'ramos' guarda a última versão de cada série na data acima: como a tabela só envelhece para baixo, quem está abaixo dela está desatualizado de qualquer forma.",
+  "wordpress": {
+    "rotulo": "WordPress",
+    "ultima": "7.1.4",
+    "so_ultima_serie": true,
+    "fonte_versoes": "https://api.wordpress.org/core/version-check/1.7/",
+    "fonte_politica": "https://wordpress.org/documentation/article/supported-versions/",
+    "ramos": {
+      "7.1": "7.1.4",
+      "7.0": "7.0.8",
+      "6.9": "6.9.11",
+      "6.8": "6.8.12",
+      "6.7": "6.7.11",
+      "6.6": "6.6.11",
+      "6.5": "6.5.14",
+      "6.4": "6.4.14",
+      "6.3": "6.3.14",
+      "6.2": "6.2.15",
+      "6.1": "6.1.16",
+      "6.0": "6.0.18",
+      "5.9": "5.9.20",
+      "5.8": "5.8.19",
+      "5.7": "5.7.21",
+      "5.6": "5.6.23",
+      "5.5": "5.5.24",
+      "5.4": "5.4.25",
+      "5.3": "5.3.27",
+      "5.2": "5.2.30",
+      "5.1": "5.1.28",
+      "5.0": "5.0.31",
+      "4.9": "4.9.35",
+      "4.8": "4.8.34",
+      "4.7": "4.7.39"
+    },
+    "fim_de_suporte": [
+      {
+        "antes_de": "4.1",
+        "data": "2022-12-01",
+        "serie": "4.0 e anteriores",
+        "fonte": "https://wordpress.org/news/2022/09/dropping-security-updates-for-wordpress-versions-3-7-through-4-0/"
+      },
+      {
+        "antes_de": "4.7",
+        "data": "2025-07-01",
+        "serie": "4.1 a 4.6",
+        "fonte": "https://wordpress.org/news/2025/06/dropping-security-updates-for-wordpress-versions-4-1-through-4-6/"
+      }
+    ]
+  },
+  "joomla": {
+    "rotulo": "Joomla",
+    "ultima": "6.2.0",
+    "so_ultima_serie": false,
+    "fonte_versoes": "https://downloads.joomla.org/api/v1/latest/cms",
+    "ramos": {
+      "6": "6.2.0",
+      "5": "5.4.10",
+      "4": "4.4.14",
+      "3": "3.10.12"
+    },
+    "fim_de_suporte": [
+      {
+        "antes_de": "4",
+        "data": "2023-08-17",
+        "serie": "3 e anteriores",
+        "fonte": "https://raw.githubusercontent.com/joomla/joomla-cms/3.10.12/plugins/quickicon/eos310/eos310.php"
+      },
+      {
+        "antes_de": "5",
+        "data": "2025-10-17",
+        "serie": "4",
+        "fonte": "https://raw.githubusercontent.com/joomla/joomla-cms/4.4.14/plugins/quickicon/eos/src/Extension/Eos.php"
+      },
+      {
+        "antes_de": "6",
+        "data": "2027-10-12",
+        "serie": "5",
+        "fonte": "https://developer.joomla.org/roadmap.html"
+      },
+      {
+        "antes_de": "7",
+        "data": "2029-10-16",
+        "serie": "6",
+        "fonte": "https://developer.joomla.org/roadmap.html"
+      }
+    ]
+  },
+  "drupal": {
+    "rotulo": "Drupal",
+    "so_ultima_serie": false,
+    "fim_de_suporte": [
+      {
+        "antes_de": "7",
+        "data": "2016-02-24",
+        "serie": "6 e anteriores",
+        "fonte": "https://www.drupal.org/about/core/policies/core-release-cycles/schedule"
+      },
+      {
+        "antes_de": "8",
+        "data": "2025-01-05",
+        "serie": "7",
+        "fonte": "https://www.drupal.org/about/core/policies/core-release-cycles/schedule"
+      },
+      {
+        "antes_de": "9",
+        "data": "2021-11-17",
+        "serie": "8",
+        "fonte": "https://www.drupal.org/about/core/policies/core-release-cycles/schedule"
+      },
+      {
+        "antes_de": "10",
+        "data": "2023-11-01",
+        "serie": "9",
+        "fonte": "https://www.drupal.org/about/core/policies/core-release-cycles/schedule"
+      },
+      {
+        "antes_de": "11",
+        "data": "2026-12-09",
+        "serie": "10",
+        "fonte": "https://www.drupal.org/about/core/policies/core-release-cycles/schedule"
+      }
+    ]
+  },
+  "cves": [
+    {
+      "id": "CVE-2026-87902",
+      "produto": "wordpress",
+      "resumo": "Um atacante sem login pode fazer get_page_template() incluir um arquivo .php local fora das pastas do tema ativo; em certas condições, execução remota de código.",
+      "fonte": "https://nvd.nist.gov/vuln/detail/CVE-2026-87902",
+      "faixas": [
+        {"antes_de": "4.7.37"},
+        {"de": "4.8", "antes_de": "4.8.32"},
+        {"de": "4.9", "antes_de": "4.9.33"},
+        {"de": "5.0", "antes_de": "5.0.29"},
+        {"de": "5.1", "antes_de": "5.1.26"},
+        {"de": "5.2", "antes_de": "5.2.28"},
+        {"de": "5.3", "antes_de": "5.3.25"},
+        {"de": "5.4", "antes_de": "5.4.23"},
+        {"de": "5.5", "antes_de": "5.5.22"},
+        {"de": "5.6", "antes_de": "5.6.21"},
+        {"de": "5.7", "antes_de": "5.7.19"},
+        {"de": "5.8", "antes_de": "5.8.17"},
+        {"de": "5.9", "antes_de": "5.9.18"},
+        {"de": "6.0", "antes_de": "6.0.16"},
+        {"de": "6.1", "antes_de": "6.1.14"},
+        {"de": "6.2", "antes_de": "6.2.13"},
+        {"de": "6.3", "antes_de": "6.3.12"},
+        {"de": "6.4", "antes_de": "6.4.12"},
+        {"de": "6.5", "antes_de": "6.5.12"},
+        {"de": "6.6", "antes_de": "6.6.9"},
+        {"de": "6.7", "antes_de": "6.7.9"},
+        {"de": "6.8", "antes_de": "6.8.10"},
+        {"de": "6.9", "antes_de": "6.9.9"},
+        {"de": "7.0", "antes_de": "7.0.6"},
+        {"de": "7.1", "antes_de": "7.1.2"}
+      ]
+    },
+    {
+      "id": "CVE-2026-63030",
+      "produto": "wordpress",
+      "resumo": "Confusão de rotas no endpoint de lotes (batch) da API REST; combinada com a CVE-2026-60137, permite injeção de SQL e execução remota de código.",
+      "fonte": "https://nvd.nist.gov/vuln/detail/CVE-2026-63030",
+      "faixas": [
+        {"de": "6.9", "antes_de": "6.9.5"},
+        {"de": "7.0", "antes_de": "7.0.2"}
+      ]
+    },
+    {
+      "id": "CVE-2026-60137",
+      "produto": "wordpress",
+      "resumo": "Injeção de SQL pelo parâmetro author__not_in de WP_Query quando um plugin ou tema repassa dados não confiáveis.",
+      "fonte": "https://nvd.nist.gov/vuln/detail/CVE-2026-60137",
+      "faixas": [
+        {"de": "6.8", "antes_de": "6.8.6"},
+        {"de": "6.9", "antes_de": "6.9.5"},
+        {"de": "7.0", "antes_de": "7.0.2"}
+      ]
+    },
+    {
+      "id": "CVE-2023-23752",
+      "produto": "joomla",
+      "resumo": "Falha de controle de acesso libera endpoints da API sem autenticação, inclusive os que mostram a configuração do site.",
+      "fonte": "https://nvd.nist.gov/vuln/detail/CVE-2023-23752",
+      "faixas": [
+        {"de": "4.0.0", "antes_de": "4.2.8"}
+      ]
+    },
+    {
+      "id": "CVE-2026-9082",
+      "produto": "drupal",
+      "resumo": "Injeção de SQL no núcleo do Drupal.",
+      "fonte": "https://nvd.nist.gov/vuln/detail/CVE-2026-9082",
+      "faixas": [
+        {"de": "8.9.0", "antes_de": "10.4.10"},
+        {"de": "10.5.0", "antes_de": "10.5.10"},
+        {"de": "10.6.0", "antes_de": "10.6.9"},
+        {"de": "11.0.0", "antes_de": "11.1.10"},
+        {"de": "11.2.0", "antes_de": "11.2.12"},
+        {"de": "11.3.0", "antes_de": "11.3.10"}
+      ]
+    },
+    {
+      "id": "CVE-2020-13671",
+      "produto": "drupal",
+      "resumo": "O núcleo trata mal certos nomes de arquivo enviados: um arquivo pode ser servido com a extensão errada ou até executado como PHP em algumas hospedagens.",
+      "fonte": "https://nvd.nist.gov/vuln/detail/CVE-2020-13671",
+      "faixas": [
+        {"de": "7.0", "antes_de": "7.74"},
+        {"de": "8.8.0", "antes_de": "8.8.11"},
+        {"de": "8.9.0", "antes_de": "8.9.9"},
+        {"de": "9.0.0", "antes_de": "9.0.8"}
+      ]
+    },
+    {
+      "id": "CVE-2019-6340",
+      "produto": "drupal",
+      "resumo": "Alguns tipos de campo não limpam dados vindos de fora dos formulários; execução de código PHP quando módulos de serviços web estão ativos (REST com PATCH ou POST, JSON:API).",
+      "fonte": "https://nvd.nist.gov/vuln/detail/CVE-2019-6340",
+      "faixas": [
+        {"de": "8.5.0", "antes_de": "8.5.11"},
+        {"de": "8.6.0", "antes_de": "8.6.10"}
+      ]
+    },
+    {
+      "id": "CVE-2018-7602",
+      "produto": "drupal",
+      "resumo": "Execução remota de código em vários subsistemas do Drupal 7 e 8 (ligada à SA-CORE-2018-002).",
+      "fonte": "https://nvd.nist.gov/vuln/detail/CVE-2018-7602",
+      "faixas": [
+        {"de": "7.0", "antes_de": "7.59"},
+        {"de": "8.4.0", "antes_de": "8.4.8"},
+        {"de": "8.5.0", "antes_de": "8.5.3"}
+      ]
+    },
+    {
+      "id": "CVE-2018-7600",
+      "produto": "drupal",
+      "resumo": "Execução remota de código sem login (Drupalgeddon 2), com a configuração padrão.",
+      "fonte": "https://nvd.nist.gov/vuln/detail/CVE-2018-7600",
+      "faixas": [
+        {"ate": "7.57"},
+        {"de": "8.0.0", "antes_de": "8.3.9"},
+        {"de": "8.4.0", "antes_de": "8.4.6"},
+        {"de": "8.5.0", "antes_de": "8.5.1"}
+      ]
+    }
+  ]
+}
