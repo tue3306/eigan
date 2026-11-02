@@ -3,7 +3,7 @@
   "url": "https://publicsuffix.org/list/public_suffix_list.dat",
   "licenca": "MPL-2.0 (https://mozilla.org/MPL/2.0/). Este arquivo é uma Modificação da lista (convertida para JSON, regras IDN em A-label/punycode) e continua sob a MPL-2.0.",
   "versao": "2026-10-31_14-17-28_UTC (commit 73f8cc701c084fe07d888ec552b2f0b53281a674)",
-  "atualizado": "2026-11-01",
+  "atualizado": "2026-11-02",
   "obs": "Regras da seção ICANN ('icann') e da seção de domínios privados ('privado'), no formato da lista: '*.' = curinga, '!' = exceção. Usadas para achar o domínio organizacional (www.exemplo.com.br -> exemplo.com.br) e para reconhecer nomes sob plataformas compartilhadas (ex.: github.io). Regras IDN que o codec IDNA 2003 do Python não converte ficaram de fora: nenhuma.",
   "icann": [
     "!city.kawasaki.jp", "!city.kitakyushu.jp", "!city.kobe.jp", "!city.nagoya.jp",
