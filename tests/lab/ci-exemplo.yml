@@ -1,0 +1,20 @@
+# Exemplo (nao ativo): copie para .github/workflows/lab.yml quando o estagio de testes quiser rodar o lab no CI.
+name: lab
+on:
+  workflow_dispatch:
+jobs:
+  lab:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/cache@v4
+        with:
+          path: ~/.eigan-lab/mamba
+          key: eigan-lab-${{ hashFiles('tests/lab/instalar.sh') }}
+      - run: sudo apt-get update   # apt-get download precisa das listas
+      - run: tests/lab/instalar.sh
+      - run: tests/lab/subir.sh
+      - run: ~/.eigan-lab/mamba/envs/core/bin/python tests/lab/verificar.py
+      - run: python3 tests/lab/ferramentas/validar_catalogo.py
+      - if: always()
+        run: tests/lab/parar.sh

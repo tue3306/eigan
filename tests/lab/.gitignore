@@ -1,0 +1,16 @@
+# Tudo que o laboratório gera em tempo de execução fica fora do git.
+# O ambiente real mora em ~/.eigan-lab (fora do repositório); aqui só entram
+# arquivos temporários caso alguém aponte EIGAN_LAB_HOME para dentro da pasta.
+_gerado/
+# Alvos gerados na subida: dependencias antigas e codigo falho de proposito nao entram no git,
+# senao o Dependabot e o CodeQL do repositorio os tratariam como problemas do proprio EIGAN.
+alvos/
+run/
+*.pem
+*.key
+*.crt
+*.csr
+*.pid
+*.log
+__pycache__/
+*.pyc

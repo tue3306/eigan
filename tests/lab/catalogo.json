@@ -1,0 +1,1991 @@
+{
+  "versao_catalogo": 1,
+  "descricao": "Catalogo legivel por maquina do EIGAN Lab. Descreve COMPORTAMENTO esperado; os ids de achado (finding ids) serao ligados pelo estagio de testes.",
+  "host": "127.0.0.1",
+  "portas": "portas.env",
+  "legenda": {
+    "modo": {
+      "inseguro": "o EIGAN DEVE reportar as falhas plantadas",
+      "endurecido": "o EIGAN NAO DEVE reportar essas falhas (guarda contra falso positivo)"
+    },
+    "tipo": {
+      "real": "software de verdade, em espaco de usuario",
+      "simulado": "simulador Python do protocolo, rotulado como simulado; nao e o software real"
+    }
+  },
+  "ressalvas_globais": [
+    "Certificados do lab sao emitidos por uma CA privada gerada em tempo de execucao (gerar_certs.sh): sem a CA, o EIGAN vera 'cadeia nao confiavel' em todos os servicos TLS, inclusive os endurecidos. Isso e tolerado; o que nao pode aparecer nos endurecidos sao os achados de protocolo, cifra, expiracao, nome e conteudo.",
+    "Tudo escuta em 127.0.0.1. UDP (DNS, memcached) so e alcancavel de dentro do WSL no modo de rede NAT do WSL2.",
+    "Os servicos reais rodam sem root: PAM, portas < 1024 e servicos Windows (RDP, MSSQL, WinRM) nao existem de verdade; por isso ha simuladores rotulados.",
+    "Nenhuma verificacao de CVE por versao foi feita para o catalogo: as CVEs citadas sao as esperadas pela regra de banner e devem ser confirmadas pelo estagio de testes."
+  ],
+  "servicos": [
+    {
+      "id": "nginx-inseguro-http",
+      "servico": "nginx",
+      "variante": "http",
+      "modo": "inseguro",
+      "tipo": "real",
+      "software": "nginx (conda-forge, versao exata em instalar.sh --> 'nginx -v')",
+      "porta_var": "PORT_NGINX_INS_HTTP",
+      "porta": 18080,
+      "host": "127.0.0.1",
+      "protocolo": "http",
+      "tls": false,
+      "processo": "nginx-inseguro",
+      "falhas_plantadas": [
+        "sem HSTS, CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy e Permissions-Policy",
+        "cabecalho Server com versao",
+        "cookie PHPSESSID/JSESSIONID sem Secure, HttpOnly e SameSite",
+        "/.git/HEAD, /.git/config (URL com usuario:senha FALSOS) e /.git/index legiveis",
+        "/.env com variaveis e segredos FALSOS preenchidos",
+        "/backup.sql (dump MySQL fake), /backup.zip, /error.log, /id_rsa (chave descartavel), /.htpasswd, /web.config, /docker-compose.yml, /package.json, /.DS_Store",
+        "/phpinfo.php e /info.php (pagina estatica imitando phpinfo, SIMULADO)",
+        "/actuator (com heapdump) e /actuator/env (JSON imitando Spring Boot, SIMULADO), /swagger.json, /crossdomain.xml com wildcard",
+        "listagem de diretorio em /listing/",
+        "/api/* com CORS espelhando o Origin e Allow-Credentials: true",
+        "pagina inicial carrega jQuery 1.12.4 de CDN (biblioteca com vulnerabilidades publicas)",
+        "/nginx_status (stub_status) publico",
+        "HTTP puro, sem redirecionamento para HTTPS"
+      ],
+      "eigan_deve_reportar": [
+        "ausencia dos cabecalhos de seguranca citados (um achado por cabecalho ou agrupados)",
+        "divulgacao de versao do servidor",
+        "cookie sem flags de seguranca",
+        "repositorio .git exposto, com severidade critica por causa da credencial na URL remota",
+        ".env exposto com segredos preenchidos (critico)",
+        "dump SQL e demais arquivos sensiveis expostos (backup, chave privada, htpasswd, web.config, compose, DS_Store)",
+        "phpinfo exposto",
+        "Actuator/env, Swagger e crossdomain.xml permissivo expostos",
+        "listagem de diretorio habilitada",
+        "CORS que reflete qualquer origem com credenciais",
+        "biblioteca JavaScript desatualizada (jQuery 1.12.4)",
+        "stub_status do nginx exposto (baixa)",
+        "site servido so em HTTP, sem redirecionar para HTTPS"
+      ],
+      "eigan_nao_deve_reportar": [
+        "nada alem do que esta planejado: arquivos como /.git/index devem aparecer uma vez, sem duplicar por aliases"
+      ],
+      "ressalvas": [],
+      "como_verificar": "curl -sI http://127.0.0.1:18080/ ; curl -s http://127.0.0.1:18080/.env"
+    },
+    {
+      "id": "nginx-inseguro-tls-legado",
+      "servico": "nginx",
+      "variante": "tls-legado",
+      "modo": "inseguro",
+      "tipo": "real",
+      "software": "nginx (conda-forge) + OpenSSL do conda-forge",
+      "porta_var": "PORT_NGINX_INS_TLS_LEGADO",
+      "porta": 18443,
+      "host": "127.0.0.1",
+      "protocolo": "https",
+      "tls": true,
+      "processo": "nginx-inseguro",
+      "falhas_plantadas": [
+        "TLS 1.0 e 1.1 habilitados",
+        "cifras CBC-SHA e troca de chave RSA estatica (sem sigilo perfeito) via ALL:@SECLEVEL=0",
+        "mesma arvore de arquivos sensiveis do http"
+      ],
+      "eigan_deve_reportar": [
+        "TLS 1.0 e TLS 1.1 aceitos (protocolos obsoletos)",
+        "suites sem sigilo perfeito e/ou CBC",
+        "(mais todos os achados de conteudo web do nginx-inseguro-http)"
+      ],
+      "eigan_nao_deve_reportar": [
+        "TLS 1.2/1.3 nao sao problema"
+      ],
+      "ressalvas": [
+        "a CA do lab nao e publica: a cadeia sera 'nao confiavel' em todos os casos exceto quando a CA do lab for informada"
+      ],
+      "como_verificar": "echo | openssl s_client -connect 127.0.0.1:18443 -servername localhost"
+    },
+    {
+      "id": "nginx-inseguro-tls-expirado",
+      "servico": "nginx",
+      "variante": "tls-expirado",
+      "modo": "inseguro",
+      "tipo": "real",
+      "software": "nginx (conda-forge) + OpenSSL do conda-forge",
+      "porta_var": "PORT_NGINX_INS_TLS_EXPIRADO",
+      "porta": 18444,
+      "host": "127.0.0.1",
+      "protocolo": "https",
+      "tls": true,
+      "processo": "nginx-inseguro",
+      "falhas_plantadas": [
+        "certificado emitido pela CA do lab com validade 2020-01-01 a 2020-04-01 (expirado)"
+      ],
+      "eigan_deve_reportar": [
+        "certificado expirado (critico/alto)"
+      ],
+      "eigan_nao_deve_reportar": [
+        "TLS 1.2 e 1.3 NAO devem ser reportados como problema"
+      ],
+      "ressalvas": [
+        "a CA do lab nao e publica: a cadeia sera 'nao confiavel' em todos os casos exceto quando a CA do lab for informada"
+      ],
+      "como_verificar": "echo | openssl s_client -connect 127.0.0.1:18444 -servername localhost"
+    },
+    {
+      "id": "nginx-inseguro-tls-autoassinado",
+      "servico": "nginx",
+      "variante": "tls-autoassinado",
+      "modo": "inseguro",
+      "tipo": "real",
+      "software": "nginx (conda-forge) + OpenSSL do conda-forge",
+      "porta_var": "PORT_NGINX_INS_TLS_AUTOASSINADO",
+      "porta": 18445,
+      "host": "127.0.0.1",
+      "protocolo": "https",
+      "tls": true,
+      "processo": "nginx-inseguro",
+      "falhas_plantadas": [
+        "certificado autoassinado (emissor == titular)"
+      ],
+      "eigan_deve_reportar": [
+        "certificado autoassinado/sem cadeia confiavel"
+      ],
+      "eigan_nao_deve_reportar": [
+        "TLS 1.2 e 1.3 NAO devem ser reportados como problema"
+      ],
+      "ressalvas": [
+        "a CA do lab nao e publica: a cadeia sera 'nao confiavel' em todos os casos exceto quando a CA do lab for informada"
+      ],
+      "como_verificar": "echo | openssl s_client -connect 127.0.0.1:18445 -servername localhost"
+    },
+    {
+      "id": "nginx-inseguro-tls-hosterrado",
+      "servico": "nginx",
+      "variante": "tls-hosterrado",
+      "modo": "inseguro",
+      "tipo": "real",
+      "software": "nginx (conda-forge) + OpenSSL do conda-forge",
+      "porta_var": "PORT_NGINX_INS_TLS_HOSTERRADO",
+      "porta": 18446,
+      "host": "127.0.0.1",
+      "protocolo": "https",
+      "tls": true,
+      "processo": "nginx-inseguro",
+      "falhas_plantadas": [
+        "certificado valido, mas SAN/CN = site-errado.example.test (nao cobre localhost nem 127.0.0.1)"
+      ],
+      "eigan_deve_reportar": [
+        "nome do certificado nao corresponde ao host acessado"
+      ],
+      "eigan_nao_deve_reportar": [
+        "TLS 1.2 e 1.3 NAO devem ser reportados como problema"
+      ],
+      "ressalvas": [
+        "a CA do lab nao e publica: a cadeia sera 'nao confiavel' em todos os casos exceto quando a CA do lab for informada"
+      ],
+      "como_verificar": "echo | openssl s_client -connect 127.0.0.1:18446 -servername localhost"
+    },
+    {
+      "id": "nginx-inseguro-soft404",
+      "servico": "nginx",
+      "variante": "soft404",
+      "modo": "inseguro",
+      "tipo": "real",
+      "software": "nginx (conda-forge)",
+      "porta_var": "PORT_NGINX_INS_SOFT404",
+      "porta": 18090,
+      "host": "127.0.0.1",
+      "protocolo": "http",
+      "tls": false,
+      "processo": "nginx-inseguro",
+      "falhas_plantadas": [
+        "SPA que responde 200 + HTML para QUALQUER caminho (soft 404), incluindo /.git/HEAD e /.env"
+      ],
+      "eigan_deve_reportar": [],
+      "eigan_nao_deve_reportar": [
+        "QUALQUER achado de exposicao de arquivo (.git, .env, backup.sql, phpinfo...): a assinatura do conteudo nao confere, entao seria falso positivo"
+      ],
+      "ressalvas": [],
+      "como_verificar": "curl -s http://127.0.0.1:18090/.git/HEAD"
+    },
+    {
+      "id": "nginx-endurecido-http",
+      "servico": "nginx",
+      "variante": "http",
+      "modo": "endurecido",
+      "tipo": "real",
+      "software": "nginx (conda-forge)",
+      "porta_var": "PORT_NGINX_END_HTTP",
+      "porta": 18081,
+      "host": "127.0.0.1",
+      "protocolo": "http",
+      "tls": false,
+      "processo": "nginx-endurecido",
+      "falhas_plantadas": [],
+      "eigan_deve_reportar": [],
+      "eigan_nao_deve_reportar": [
+        "ausencia de HSTS na resposta HTTP (HSTS nao deve ser enviado em HTTP; o 301 para HTTPS esta correto)",
+        "falta de redirecionamento para HTTPS"
+      ],
+      "ressalvas": [],
+      "como_verificar": "curl -sI http://127.0.0.1:18081/"
+    },
+    {
+      "id": "nginx-endurecido-tls",
+      "servico": "nginx",
+      "variante": "tls",
+      "modo": "endurecido",
+      "tipo": "real",
+      "software": "nginx (conda-forge)",
+      "porta_var": "PORT_NGINX_END_TLS",
+      "porta": 18447,
+      "host": "127.0.0.1",
+      "protocolo": "https",
+      "tls": true,
+      "processo": "nginx-endurecido",
+      "falhas_plantadas": [],
+      "eigan_deve_reportar": [],
+      "eigan_nao_deve_reportar": [
+        "cabecalhos de seguranca ausentes",
+        "divulgacao de versao",
+        "cookie sem flags",
+        "qualquer arquivo sensivel (.git, .env, backup.sql, phpinfo, nginx_status)",
+        "TLS 1.0/1.1",
+        "cifras fracas",
+        "CORS permissivo",
+        "listagem de diretorio",
+        "metodo TRACE/PUT habilitado"
+      ],
+      "ressalvas": [
+        "certificado ECDSA P-256 emitido pela CA do lab: sem a CA, 'cadeia nao confiavel' e esperado e tolerado",
+        "o lab so serve localhost/127.0.0.1: achados sobre dominio publico (DNS, CAA, MTA-STS) nao se aplicam"
+      ],
+      "como_verificar": "curl -skI https://127.0.0.1:18447/"
+    },
+    {
+      "id": "apache-inseguro-http",
+      "servico": "apache",
+      "variante": "http",
+      "modo": "inseguro",
+      "tipo": "real",
+      "software": "Apache httpd (pacote Ubuntu extraido, sem root)",
+      "porta_var": "PORT_APACHE_INS_HTTP",
+      "porta": 18180,
+      "host": "127.0.0.1",
+      "protocolo": "http",
+      "tls": false,
+      "processo": "apache-inseguro",
+      "falhas_plantadas": [
+        "sem HSTS, CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy e Permissions-Policy",
+        "cookie PHPSESSID/JSESSIONID sem Secure, HttpOnly e SameSite",
+        "/.git/HEAD, /.git/config (URL com usuario:senha FALSOS) e /.git/index legiveis",
+        "/.env com variaveis e segredos FALSOS preenchidos",
+        "/backup.sql (dump MySQL fake), /backup.zip, /error.log, /id_rsa (chave descartavel), /.htpasswd, /web.config, /docker-compose.yml, /package.json, /.DS_Store",
+        "/phpinfo.php e /info.php (pagina estatica imitando phpinfo, SIMULADO)",
+        "/actuator (com heapdump) e /actuator/env (JSON imitando Spring Boot, SIMULADO), /swagger.json, /crossdomain.xml com wildcard",
+        "listagem de diretorio em /listing/",
+        "/api/* com CORS espelhando o Origin e Allow-Credentials: true",
+        "pagina inicial carrega jQuery 1.12.4 de CDN (biblioteca com vulnerabilidades publicas)",
+        "ServerTokens Full + ServerSignature On (Apache/2.4.x (Ubuntu) OpenSSL/x)",
+        "/server-status e /server-info publicos",
+        "TRACE habilitado",
+        "ETag com inode (FileETag All)",
+        "Options Indexes"
+      ],
+      "eigan_deve_reportar": [
+        "ausencia dos cabecalhos de seguranca citados (um achado por cabecalho ou agrupados)",
+        "divulgacao de versao do servidor",
+        "cookie sem flags de seguranca",
+        "repositorio .git exposto, com severidade critica por causa da credencial na URL remota",
+        ".env exposto com segredos preenchidos (critico)",
+        "dump SQL e demais arquivos sensiveis expostos (backup, chave privada, htpasswd, web.config, compose, DS_Store)",
+        "phpinfo exposto",
+        "Actuator/env, Swagger e crossdomain.xml permissivo expostos",
+        "listagem de diretorio habilitada",
+        "CORS que reflete qualquer origem com credenciais",
+        "biblioteca JavaScript desatualizada (jQuery 1.12.4)",
+        "Apache server-status e server-info expostos",
+        "metodo TRACE habilitado",
+        "ETag que vaza inode"
+      ],
+      "eigan_nao_deve_reportar": [
+        "nada alem do que esta planejado: arquivos como /.git/index devem aparecer uma vez, sem duplicar por aliases"
+      ],
+      "ressalvas": [],
+      "como_verificar": "curl -s http://127.0.0.1:18180/server-status ; curl -s -X TRACE http://127.0.0.1:18180/"
+    },
+    {
+      "id": "apache-inseguro-tls",
+      "servico": "apache",
+      "variante": "tls",
+      "modo": "inseguro",
+      "tipo": "real",
+      "software": "Apache httpd + libssl do sistema",
+      "porta_var": "PORT_APACHE_INS_TLS",
+      "porta": 18543,
+      "host": "127.0.0.1",
+      "protocolo": "https",
+      "tls": true,
+      "processo": "apache-inseguro",
+      "falhas_plantadas": [
+        "TLS 1.0 e 1.1 habilitados (SSLProtocol all +TLSv1 +TLSv1.1)",
+        "SSLCipherSuite ALL:@SECLEVEL=0",
+        "mesmos achados de conteudo e cabecalhos do http"
+      ],
+      "eigan_deve_reportar": [
+        "TLS 1.0/1.1 aceitos",
+        "suites fracas/sem PFS",
+        "(mais os achados web do apache-inseguro-http)"
+      ],
+      "eigan_nao_deve_reportar": [
+        "TLS 1.2/1.3 como problema"
+      ],
+      "ressalvas": [],
+      "como_verificar": "echo | openssl s_client -connect 127.0.0.1:18543 -tls1 -cipher 'ALL:@SECLEVEL=0'"
+    },
+    {
+      "id": "apache-endurecido-http",
+      "servico": "apache",
+      "variante": "http",
+      "modo": "endurecido",
+      "tipo": "real",
+      "software": "Apache httpd",
+      "porta_var": "PORT_APACHE_END_HTTP",
+      "porta": 18181,
+      "host": "127.0.0.1",
+      "protocolo": "http",
+      "tls": false,
+      "processo": "apache-endurecido",
+      "falhas_plantadas": [],
+      "eigan_deve_reportar": [],
+      "eigan_nao_deve_reportar": [
+        "falta de HSTS no HTTP",
+        "falta de redirecionamento",
+        "server-status"
+      ],
+      "ressalvas": [],
+      "como_verificar": "curl -sI http://127.0.0.1:18181/"
+    },
+    {
+      "id": "apache-endurecido-tls",
+      "servico": "apache",
+      "variante": "tls",
+      "modo": "endurecido",
+      "tipo": "real",
+      "software": "Apache httpd",
+      "porta_var": "PORT_APACHE_END_TLS",
+      "porta": 18544,
+      "host": "127.0.0.1",
+      "protocolo": "https",
+      "tls": true,
+      "processo": "apache-endurecido",
+      "falhas_plantadas": [],
+      "eigan_deve_reportar": [],
+      "eigan_nao_deve_reportar": [
+        "cabecalhos ausentes",
+        "versao no Server (apenas 'Apache')",
+        "TRACE",
+        "server-status/server-info",
+        "arquivos sensiveis",
+        "TLS 1.0/1.1",
+        "listagem"
+      ],
+      "ressalvas": [
+        "certificado da CA do lab: cadeia nao confiavel e tolerada"
+      ],
+      "como_verificar": "curl -skI https://127.0.0.1:18544/"
+    },
+    {
+      "id": "tomcat-inseguro-http",
+      "servico": "tomcat",
+      "variante": "http",
+      "modo": "inseguro",
+      "tipo": "real",
+      "software": "Apache Tomcat 10.1.61 (tarball oficial) + OpenJDK 21 (conda-forge)",
+      "porta_var": "PORT_TOMCAT_INS_HTTP",
+      "porta": 18088,
+      "host": "127.0.0.1",
+      "protocolo": "http",
+      "tls": false,
+      "processo": "tomcat-inseguro",
+      "falhas_plantadas": [
+        "paginas de erro mostram 'Apache Tomcat/10.1.61'",
+        "aplicacoes padrao (ROOT, docs, examples, manager, host-manager) instaladas",
+        "Server: Apache-Coyote/1.1",
+        "porta de shutdown em 18005 (apenas loopback)"
+      ],
+      "eigan_deve_reportar": [
+        "divulgacao de versao do Tomcat",
+        "aplicacoes de exemplo e Manager acessiveis",
+        "pagina padrao do Tomcat"
+      ],
+      "eigan_nao_deve_reportar": [
+        "CVEs de Tomcat 10.1.61 so se a base vendorizada os listar (versao recente; nao e premissa do lab)"
+      ],
+      "ressalvas": [],
+      "como_verificar": "curl -s http://127.0.0.1:18088/inexistente | grep -o 'Apache Tomcat/[0-9.]*'"
+    },
+    {
+      "id": "tomcat-inseguro-ajp",
+      "servico": "tomcat",
+      "variante": "ajp",
+      "modo": "inseguro",
+      "tipo": "real",
+      "software": "Apache Tomcat 10.1.61",
+      "porta_var": "PORT_TOMCAT_INS_AJP",
+      "porta": 18009,
+      "host": "127.0.0.1",
+      "protocolo": "ajp13",
+      "tls": false,
+      "processo": "tomcat-inseguro",
+      "falhas_plantadas": [
+        "conector AJP/1.3 habilitado com secretRequired=false e allowedRequestAttributesPattern=.* (configuracao do tipo Ghostcat). Obs.: a versao 10.1.61 NAO e vulneravel ao bug em si; o risco e a configuracao sem segredo"
+      ],
+      "eigan_deve_reportar": [
+        "AJP exposto sem segredo (configuracao insegura), mesmo em loopback neste lab"
+      ],
+      "eigan_nao_deve_reportar": [
+        "alegar a CVE-2020-1938 como confirmada para esta versao"
+      ],
+      "ressalvas": [],
+      "como_verificar": "python3 -c \"import socket;s=socket.create_connection(('127.0.0.1',18009));s.send(bytes.fromhex('12340001')+b'\\x0a');print(s.recv(8).hex())\"  # 4142000109 = CPong"
+    },
+    {
+      "id": "tomcat-endurecido-http",
+      "servico": "tomcat",
+      "variante": "http",
+      "modo": "endurecido",
+      "tipo": "real",
+      "software": "Apache Tomcat 10.1.61",
+      "porta_var": "PORT_TOMCAT_END_HTTP",
+      "porta": 18089,
+      "host": "127.0.0.1",
+      "protocolo": "http",
+      "tls": false,
+      "processo": "tomcat-endurecido",
+      "falhas_plantadas": [],
+      "eigan_deve_reportar": [],
+      "eigan_nao_deve_reportar": [
+        "versao do Tomcat nas paginas de erro",
+        "AJP (a porta nao existe)",
+        "aplicacoes de exemplo",
+        "Manager",
+        "porta de shutdown (desligada: port=-1)"
+      ],
+      "ressalvas": [
+        "sem HTTPS (lab simples): 'site sem HTTPS' pode aparecer; os cabecalhos de seguranca tambem nao foram acrescentados a este gemeo"
+      ],
+      "como_verificar": "curl -s http://127.0.0.1:18089/inexistente"
+    },
+    {
+      "id": "sshd-inseguro",
+      "servico": "openssh",
+      "variante": "",
+      "modo": "inseguro",
+      "tipo": "real",
+      "software": "OpenSSH 10.5p1 (conda-forge) em modo usuario",
+      "porta_var": "PORT_SSHD_INS",
+      "porta": 12222,
+      "host": "127.0.0.1",
+      "protocolo": "ssh",
+      "tls": false,
+      "processo": "sshd-inseguro",
+      "falhas_plantadas": [
+        "KEX diffie-hellman-group1-sha1, group14-sha1, group-exchange-sha1",
+        "cifras 3des-cbc e aes*-cbc",
+        "MAC hmac-md5/hmac-sha1 (inclusive -96)",
+        "ssh-rsa (SHA-1) aceito; chave de host RSA de 1024 bits e ECDSA",
+        "PasswordAuthentication yes, PermitEmptyPasswords yes, PermitRootLogin yes, ChallengeResponse yes",
+        "X11Forwarding, AllowTcpForwarding, GatewayPorts yes, PermitTunnel yes, MaxAuthTries 10",
+        "banner pre-login"
+      ],
+      "eigan_deve_reportar": [
+        "algoritmos de troca de chaves, cifras e MACs obsoletos",
+        "chave de host RSA de 1024 bits",
+        "autenticacao por senha habilitada",
+        "(se detectavel) login de root e senhas vazias permitidos",
+        "versao do OpenSSH no banner e banner pre-autenticacao"
+      ],
+      "eigan_nao_deve_reportar": [
+        "nao tentar logar nem adivinhar senha (so ler o KEXINIT)"
+      ],
+      "ressalvas": [
+        "a configuracao do sshd nao e visivel de fora; o EIGAN so ve o que o servidor anuncia (KEX/cifras/MAC/chaves/metodos de autenticacao). PermitRootLogin e PermitEmptyPasswords so seriam achados em auditoria local de configuracao (alvos/projeto-vulneravel/configs/sshd_config)",
+        "sem root nao ha PAM: senhas nao funcionam, o que nao altera o que e anunciado"
+      ],
+      "como_verificar": "ssh -vv -p 12222 -o BatchMode=yes 127.0.0.1 true 2>&1 | grep -i kex_algorithms"
+    },
+    {
+      "id": "sshd-endurecido",
+      "servico": "openssh",
+      "variante": "",
+      "modo": "endurecido",
+      "tipo": "real",
+      "software": "OpenSSH 10.5p1 (conda-forge)",
+      "porta_var": "PORT_SSHD_END",
+      "porta": 12223,
+      "host": "127.0.0.1",
+      "protocolo": "ssh",
+      "tls": false,
+      "processo": "sshd-endurecido",
+      "falhas_plantadas": [],
+      "eigan_deve_reportar": [],
+      "eigan_nao_deve_reportar": [
+        "algoritmos obsoletos",
+        "autenticacao por senha anunciada (so publickey)",
+        "chave RSA fraca (RSA 3072 + ed25519)",
+        "banner de versao como problema critico (OpenSSH 10.5 e recente)"
+      ],
+      "ressalvas": [
+        "a versao do OpenSSH aparece no banner (informativo, nao falha)"
+      ],
+      "como_verificar": "ssh -vv -p 12223 -o BatchMode=yes 127.0.0.1 true 2>&1 | grep -i 'Authentications that can continue'"
+    },
+    {
+      "id": "redis-inseguro",
+      "servico": "redis",
+      "variante": "",
+      "modo": "inseguro",
+      "tipo": "real",
+      "software": "Redis 8.10.2 (conda-forge)",
+      "porta_var": "PORT_REDIS_INS",
+      "porta": 16379,
+      "host": "127.0.0.1",
+      "protocolo": "redis",
+      "tls": false,
+      "processo": "redis-inseguro",
+      "falhas_plantadas": [
+        "sem requirepass e protected-mode no",
+        "CONFIG GET/SET permitidos",
+        "INFO revela versao, SO e caminhos"
+      ],
+      "eigan_deve_reportar": [
+        "Redis acessivel sem autenticacao (critico)",
+        "comandos administrativos disponiveis (CONFIG)",
+        "divulgacao de informacoes via INFO"
+      ],
+      "eigan_nao_deve_reportar": [
+        "escrever chaves ou alterar CONFIG (so PING/INFO de leitura)"
+      ],
+      "ressalvas": [],
+      "como_verificar": "redis-cli -p 16379 ping"
+    },
+    {
+      "id": "redis-endurecido",
+      "servico": "redis",
+      "variante": "",
+      "modo": "endurecido",
+      "tipo": "real",
+      "software": "Redis 8.10.2",
+      "porta_var": "PORT_REDIS_END",
+      "porta": 16380,
+      "host": "127.0.0.1",
+      "protocolo": "redis",
+      "tls": false,
+      "processo": "redis-endurecido",
+      "falhas_plantadas": [],
+      "eigan_deve_reportar": [],
+      "eigan_nao_deve_reportar": [
+        "Redis sem autenticacao (responde -NOAUTH)",
+        "INFO/CONFIG acessiveis sem credencial"
+      ],
+      "ressalvas": [
+        "sem TLS (lab simples): 'redis sem TLS' pode aparecer como informativo"
+      ],
+      "como_verificar": "redis-cli -p 16380 ping  # NOAUTH"
+    },
+    {
+      "id": "memcached-inseguro",
+      "servico": "memcached",
+      "variante": "",
+      "modo": "inseguro",
+      "tipo": "real",
+      "software": "memcached 1.6.40 (Ubuntu)",
+      "porta_var": "PORT_MEMCACHED_INS",
+      "porta": 21211,
+      "host": "127.0.0.1",
+      "protocolo": "memcached",
+      "tls": false,
+      "processo": "memcached-inseguro",
+      "falhas_plantadas": [
+        "sem autenticacao",
+        "UDP habilitado na mesma porta (vetor de amplificacao)",
+        "comando stats expoe versao, uptime, contadores"
+      ],
+      "eigan_deve_reportar": [
+        "Memcached sem autenticacao",
+        "UDP habilitado/amplificacao (se o EIGAN sondar UDP)",
+        "versao exposta"
+      ],
+      "eigan_nao_deve_reportar": [],
+      "ressalvas": [
+        "a porta UDP so e alcancavel de dentro do WSL (o encaminhamento de localhost do WSL2 e so TCP)"
+      ],
+      "como_verificar": "printf 'stats\\r\\nquit\\r\\n' | nc 127.0.0.1 21211"
+    },
+    {
+      "id": "memcached-endurecido",
+      "servico": "memcached",
+      "variante": "",
+      "modo": "endurecido",
+      "tipo": "real",
+      "software": "memcached 1.6.40",
+      "porta_var": "PORT_MEMCACHED_END",
+      "porta": 21212,
+      "host": "127.0.0.1",
+      "protocolo": "memcached",
+      "tls": false,
+      "processo": "memcached-endurecido",
+      "falhas_plantadas": [],
+      "eigan_deve_reportar": [],
+      "eigan_nao_deve_reportar": [
+        "stats sem autenticacao (SASL ligado, o servidor nao responde stats em texto)",
+        "UDP habilitado"
+      ],
+      "ressalvas": [],
+      "como_verificar": "printf 'stats\\r\\n' | nc -w2 127.0.0.1 21212  # sem resposta"
+    },
+    {
+      "id": "postgres-inseguro",
+      "servico": "postgresql",
+      "variante": "",
+      "modo": "inseguro",
+      "tipo": "real",
+      "software": "PostgreSQL 18.6 (conda-forge)",
+      "porta_var": "PORT_POSTGRES_INS",
+      "porta": 15432,
+      "host": "127.0.0.1",
+      "protocolo": "postgresql",
+      "tls": false,
+      "processo": "postgres-inseguro",
+      "falhas_plantadas": [
+        "pg_hba com metodo trust (qualquer usuario entra sem senha)",
+        "ssl=off (SSLRequest respondido com 'N')"
+      ],
+      "eigan_deve_reportar": [
+        "PostgreSQL sem autenticacao (trust)",
+        "sem TLS"
+      ],
+      "eigan_nao_deve_reportar": [
+        "executar consultas; basta o handshake (StartupMessage -> AuthenticationOk)"
+      ],
+      "ressalvas": [],
+      "como_verificar": "psql -h 127.0.0.1 -p 15432 -U postgres -c 'select 1'"
+    },
+    {
+      "id": "postgres-endurecido",
+      "servico": "postgresql",
+      "variante": "",
+      "modo": "endurecido",
+      "tipo": "real",
+      "software": "PostgreSQL 18.6",
+      "porta_var": "PORT_POSTGRES_END",
+      "porta": 15433,
+      "host": "127.0.0.1",
+      "protocolo": "postgresql",
+      "tls": true,
+      "processo": "postgres-endurecido",
+      "falhas_plantadas": [],
+      "eigan_deve_reportar": [],
+      "eigan_nao_deve_reportar": [
+        "autenticacao fraca (scram-sha-256 exigido)",
+        "falta de TLS (ssl=on, TLS 1.2+)"
+      ],
+      "ressalvas": [
+        "certificado da CA do lab"
+      ],
+      "como_verificar": "psql 'host=127.0.0.1 port=15433 user=postgres sslmode=require'"
+    },
+    {
+      "id": "mysql-inseguro",
+      "servico": "mysql",
+      "variante": "",
+      "modo": "inseguro",
+      "tipo": "real",
+      "software": "MySQL 9.7.4 (conda-forge)",
+      "porta_var": "PORT_MYSQL_INS",
+      "porta": 13306,
+      "host": "127.0.0.1",
+      "protocolo": "mysql",
+      "tls": false,
+      "processo": "mysql-inseguro",
+      "falhas_plantadas": [
+        "usuario root sem senha (--initialize-insecure)",
+        "local_infile=1",
+        "versao exposta no handshake",
+        "TLS opcional (mysqld gera certificado automatico)"
+      ],
+      "eigan_deve_reportar": [
+        "MySQL exposto com root sem senha (so detectavel por tentativa de login anonimo/root vazio)",
+        "versao exposta",
+        "TLS nao obrigatorio"
+      ],
+      "eigan_nao_deve_reportar": [
+        "adivinhar senhas (so o login com senha vazia)"
+      ],
+      "ressalvas": [],
+      "como_verificar": "mysql -h 127.0.0.1 -P 13306 -u root -e 'select version()'"
+    },
+    {
+      "id": "mysql-endurecido",
+      "servico": "mysql",
+      "variante": "",
+      "modo": "endurecido",
+      "tipo": "real",
+      "software": "MySQL 9.7.4",
+      "porta_var": "PORT_MYSQL_END",
+      "porta": 13307,
+      "host": "127.0.0.1",
+      "protocolo": "mysql",
+      "tls": true,
+      "processo": "mysql-endurecido",
+      "falhas_plantadas": [],
+      "eigan_deve_reportar": [],
+      "eigan_nao_deve_reportar": [
+        "root sem senha",
+        "TLS nao obrigatorio (require_secure_transport=ON, TLS 1.2+)",
+        "local_infile ligado"
+      ],
+      "ressalvas": [],
+      "como_verificar": "mysql -h 127.0.0.1 -P 13307 -u root -p<senha do lab> --ssl-mode=REQUIRED"
+    },
+    {
+      "id": "mongo-inseguro",
+      "servico": "mongodb",
+      "variante": "",
+      "modo": "inseguro",
+      "tipo": "real",
+      "software": "MongoDB 8.3.7 (conda-forge)",
+      "porta_var": "PORT_MONGO_INS",
+      "porta": 27018,
+      "host": "127.0.0.1",
+      "protocolo": "mongodb",
+      "tls": false,
+      "processo": "mongo-inseguro",
+      "falhas_plantadas": [
+        "--noauth: listDatabases funciona sem credenciais",
+        "sem TLS"
+      ],
+      "eigan_deve_reportar": [
+        "MongoDB sem autenticacao (critico)",
+        "bancos listaveis"
+      ],
+      "eigan_nao_deve_reportar": [
+        "ler documentos (so listDatabases/hello)"
+      ],
+      "ressalvas": [],
+      "como_verificar": "python -c \"from pymongo import MongoClient;print(MongoClient('127.0.0.1',27018).list_database_names())\""
+    },
+    {
+      "id": "mongo-endurecido",
+      "servico": "mongodb",
+      "variante": "",
+      "modo": "endurecido",
+      "tipo": "real",
+      "software": "MongoDB 8.3.7",
+      "porta_var": "PORT_MONGO_END",
+      "porta": 27019,
+      "host": "127.0.0.1",
+      "protocolo": "mongodb",
+      "tls": false,
+      "processo": "mongo-endurecido",
+      "falhas_plantadas": [],
+      "eigan_deve_reportar": [],
+      "eigan_nao_deve_reportar": [
+        "MongoDB sem autenticacao (comandos respondem 'requires authentication')"
+      ],
+      "ressalvas": [
+        "sem TLS (lab simples): 'sem TLS' pode aparecer como informativo"
+      ],
+      "como_verificar": "listDatabases -> Unauthorized (code 13)"
+    },
+    {
+      "id": "etcd-inseguro",
+      "servico": "etcd",
+      "variante": "",
+      "modo": "inseguro",
+      "tipo": "real",
+      "software": "etcd 3.7.3 (conda-forge)",
+      "porta_var": "PORT_ETCD_INS_CLIENT",
+      "porta": 12379,
+      "host": "127.0.0.1",
+      "protocolo": "http",
+      "tls": false,
+      "processo": "etcd-inseguro",
+      "falhas_plantadas": [
+        "API v2/v3 em HTTP puro, sem autenticacao e sem TLS",
+        "/version e /health publicos"
+      ],
+      "eigan_deve_reportar": [
+        "etcd sem TLS/sem autenticacao (critico: guarda segredos do Kubernetes)",
+        "versao exposta"
+      ],
+      "eigan_nao_deve_reportar": [],
+      "ressalvas": [],
+      "como_verificar": "curl -s http://127.0.0.1:12379/version"
+    },
+    {
+      "id": "etcd-endurecido",
+      "servico": "etcd",
+      "variante": "",
+      "modo": "endurecido",
+      "tipo": "real",
+      "software": "etcd 3.7.3",
+      "porta_var": "PORT_ETCD_END_CLIENT",
+      "porta": 12381,
+      "host": "127.0.0.1",
+      "protocolo": "https",
+      "tls": true,
+      "processo": "etcd-endurecido",
+      "falhas_plantadas": [],
+      "eigan_deve_reportar": [],
+      "eigan_nao_deve_reportar": [
+        "etcd sem autenticacao (exige certificado de cliente: handshake TLS e recusado sem ele)"
+      ],
+      "ressalvas": [
+        "sem o certificado de cliente o EIGAN so ve o handshake falhar"
+      ],
+      "como_verificar": "curl -sk https://127.0.0.1:12381/version  # falha"
+    },
+    {
+      "id": "ftp-inseguro",
+      "servico": "ftp",
+      "variante": "",
+      "modo": "inseguro",
+      "tipo": "real",
+      "software": "pyftpdlib 2.2.0 (conda-forge)",
+      "porta_var": "PORT_FTP_INS",
+      "porta": 12121,
+      "host": "127.0.0.1",
+      "protocolo": "ftp",
+      "tls": false,
+      "processo": "ftp-inseguro",
+      "falhas_plantadas": [
+        "login anonimo habilitado",
+        "sem TLS (credenciais e dados em texto claro)"
+      ],
+      "eigan_deve_reportar": [
+        "FTP anonimo permitido",
+        "FTP em texto claro sem AUTH TLS"
+      ],
+      "eigan_nao_deve_reportar": [
+        "gravar arquivos (so listagem)"
+      ],
+      "ressalvas": [],
+      "como_verificar": "curl ftp://127.0.0.1:12121/"
+    },
+    {
+      "id": "ftp-endurecido",
+      "servico": "ftp",
+      "variante": "",
+      "modo": "endurecido",
+      "tipo": "real",
+      "software": "pyftpdlib 2.2.0 + pyOpenSSL",
+      "porta_var": "PORT_FTP_END",
+      "porta": 12122,
+      "host": "127.0.0.1",
+      "protocolo": "ftp",
+      "tls": true,
+      "processo": "ftp-endurecido",
+      "falhas_plantadas": [],
+      "eigan_deve_reportar": [],
+      "eigan_nao_deve_reportar": [
+        "FTP anonimo",
+        "FTP em texto claro (TLS de controle e dados obrigatorios)"
+      ],
+      "ressalvas": [
+        "FTPS explicito: o banner e anterior ao AUTH TLS (o EIGAN pode registrar 'FTP sem TLS implicito' como informativo)"
+      ],
+      "como_verificar": "curl --ssl-reqd -k --user labuser:<senha do lab> ftp://127.0.0.1:12122/"
+    },
+    {
+      "id": "smb-inseguro",
+      "servico": "smb",
+      "variante": "",
+      "modo": "inseguro",
+      "tipo": "real",
+      "software": "impacket 0.13.1 smbserver (PyPI)",
+      "porta_var": "PORT_SMB_INS",
+      "porta": 14445,
+      "host": "127.0.0.1",
+      "protocolo": "smb",
+      "tls": false,
+      "processo": "smb-inseguro",
+      "falhas_plantadas": [
+        "somente SMBv1 (NT LM 0.12)",
+        "sessao anonima/nula aceita",
+        "assinatura SMB nao exigida"
+      ],
+      "eigan_deve_reportar": [
+        "SMBv1 habilitado",
+        "sessao anonima/nula",
+        "assinatura SMB nao exigida"
+      ],
+      "eigan_nao_deve_reportar": [],
+      "ressalvas": [
+        "impacket e uma reimplementacao em Python de SMB, nao o Samba/Windows; serve para o handshake de negociacao"
+      ],
+      "como_verificar": "python smbclient via impacket (ver verificar.py: smb1_negociar)"
+    },
+    {
+      "id": "smb-endurecido",
+      "servico": "smb",
+      "variante": "",
+      "modo": "endurecido",
+      "tipo": "real",
+      "software": "impacket 0.13.1 smbserver",
+      "porta_var": "PORT_SMB_END",
+      "porta": 14446,
+      "host": "127.0.0.1",
+      "protocolo": "smb",
+      "tls": false,
+      "processo": "smb-endurecido",
+      "falhas_plantadas": [],
+      "eigan_deve_reportar": [],
+      "eigan_nao_deve_reportar": [
+        "sessao anonima (credenciais exigidas)",
+        "SMBv1 como achado se o EIGAN so negociar SMB2+ (dialeto SMB 2.0.2)"
+      ],
+      "ressalvas": [
+        "LIMITE do impacket: nao ha opcao para desligar SMBv1 nem para EXIGIR assinatura; um cliente que oferte SMB1 ainda negocia. O EIGAN pode, portanto, reportar 'assinatura nao exigida' aqui: isso e uma limitacao do lab, nao um falso positivo do EIGAN"
+      ],
+      "como_verificar": "negociar SMB2 (ver verificar.py: smb2_negociar)"
+    },
+    {
+      "id": "dns-inseguro",
+      "servico": "bind9",
+      "variante": "",
+      "modo": "inseguro",
+      "tipo": "real",
+      "software": "BIND 9.20.24 (Ubuntu, pacote extraido)",
+      "porta_var": "PORT_DNS_INS",
+      "porta": 15353,
+      "host": "127.0.0.1",
+      "protocolo": "dns",
+      "tls": false,
+      "processo": "dns-inseguro",
+      "falhas_plantadas": [
+        "recursion yes + allow-recursion any (resolvedor aberto)",
+        "allow-transfer any (AXFR liberado)",
+        "version.bind revela a versao",
+        "zona lab-inseguro.test: SPF '+all', DMARC p=none sem rua, sem CAA, sem DNSSEC, sem MTA-STS/TLS-RPT, curinga '*', CNAMEs para servicos de terceiros possivelmente inexistentes (herokuapp, s3), IP privado 10.10.0.5 em DNS publico"
+      ],
+      "eigan_deve_reportar": [
+        "resolvedor DNS aberto (RA ativo para dominio externo)",
+        "transferencia de zona AXFR permitida",
+        "versao do BIND exposta",
+        "SPF permissivo (+all)",
+        "DMARC fraco (p=none)",
+        "CAA ausente",
+        "DNSSEC ausente",
+        "CNAME pendente/candidato a takeover",
+        "registro curinga",
+        "IP privado em DNS publico"
+      ],
+      "eigan_nao_deve_reportar": [
+        "tentar derrubar ou amplificar (sem flood; uma consulta basta)"
+      ],
+      "ressalvas": [
+        "DNS sobre UDP: o encaminhamento de localhost do WSL2 e so TCP; para ver UDP rode o EIGAN dentro do WSL (ou use modo de rede 'mirrored'). A recursao devolve NXDOMAIN/SERVFAIL conforme haja internet; o que importa e o bit RA",
+        "o EIGAN precisa de uma forma de apontar para a porta 15353 em vez de 53"
+      ],
+      "como_verificar": "dig @127.0.0.1 -p 15353 lab-inseguro.test AXFR"
+    },
+    {
+      "id": "dns-endurecido",
+      "servico": "bind9",
+      "variante": "",
+      "modo": "endurecido",
+      "tipo": "real",
+      "software": "BIND 9.20.24",
+      "porta_var": "PORT_DNS_END",
+      "porta": 15354,
+      "host": "127.0.0.1",
+      "protocolo": "dns",
+      "tls": false,
+      "processo": "dns-endurecido",
+      "falhas_plantadas": [],
+      "eigan_deve_reportar": [],
+      "eigan_nao_deve_reportar": [
+        "recursao aberta (REFUSED)",
+        "AXFR (REFUSED)",
+        "versao exposta (version none)",
+        "SPF/DMARC fracos (spf '-all', DMARC p=reject com rua, alinhamento estrito)",
+        "CAA ausente",
+        "DNSSEC ausente (zona assinada, ECDSAP256SHA256)",
+        "MTA-STS/TLS-RPT ausentes"
+      ],
+      "ressalvas": [
+        "sem DS no pai (nao existe zona pai): 'cadeia DNSSEC incompleta' e esperado e tolerado",
+        "DKIM publicado com chave RSA 2048 descartavel"
+      ],
+      "como_verificar": "dig @127.0.0.1 -p 15354 lab-endurecido.test CAA +dnssec"
+    },
+    {
+      "id": "mqtt-inseguro",
+      "servico": "mosquitto",
+      "variante": "",
+      "modo": "inseguro",
+      "tipo": "real",
+      "software": "Eclipse Mosquitto (Ubuntu)",
+      "porta_var": "PORT_MQTT_INS",
+      "porta": 11883,
+      "host": "127.0.0.1",
+      "protocolo": "mqtt",
+      "tls": false,
+      "processo": "mqtt-inseguro",
+      "falhas_plantadas": [
+        "allow_anonymous true",
+        "sem TLS"
+      ],
+      "eigan_deve_reportar": [
+        "broker MQTT aceita conexao anonima",
+        "sem TLS"
+      ],
+      "eigan_nao_deve_reportar": [
+        "publicar mensagens (so CONNECT/CONNACK)"
+      ],
+      "ressalvas": [],
+      "como_verificar": "CONNECT MQTT 3.1.1 anonimo -> CONNACK rc=0 (ver verificar.py)"
+    },
+    {
+      "id": "mqtt-endurecido",
+      "servico": "mosquitto",
+      "variante": "",
+      "modo": "endurecido",
+      "tipo": "real",
+      "software": "Eclipse Mosquitto (Ubuntu)",
+      "porta_var": "PORT_MQTT_END",
+      "porta": 11884,
+      "host": "127.0.0.1",
+      "protocolo": "mqtt",
+      "tls": true,
+      "processo": "mqtt-endurecido",
+      "falhas_plantadas": [],
+      "eigan_deve_reportar": [],
+      "eigan_nao_deve_reportar": [
+        "MQTT anonimo",
+        "MQTT sem TLS (listener so TLS 1.2, usuario+senha)"
+      ],
+      "ressalvas": [],
+      "como_verificar": "conexao em texto claro e recusada"
+    },
+    {
+      "id": "sim-rdp-inseguro",
+      "servico": "rdp",
+      "variante": "",
+      "modo": "inseguro",
+      "tipo": "simulado",
+      "software": "SIMULADO (Python, bytes fixos de handshake; nao e o software real)",
+      "porta_var": "PORT_SIM_RDP_INS",
+      "porta": 13389,
+      "host": "127.0.0.1",
+      "protocolo": "rdp",
+      "tls": false,
+      "processo": "sim-rdp",
+      "falhas_plantadas": [
+        "X.224 Connection Confirm com selectedProtocol=PROTOCOL_RDP (sem NLA/CredSSP)"
+      ],
+      "eigan_deve_reportar": [
+        "RDP exposto sem NLA",
+        "RDP acessivel"
+      ],
+      "eigan_nao_deve_reportar": [],
+      "ressalvas": [],
+      "como_verificar": "verificar.py --so sim-rdp"
+    },
+    {
+      "id": "sim-rdp-endurecido",
+      "servico": "rdp",
+      "variante": "",
+      "modo": "endurecido",
+      "tipo": "simulado",
+      "software": "SIMULADO (Python, bytes fixos de handshake; nao e o software real)",
+      "porta_var": "PORT_SIM_RDP_END",
+      "porta": 13390,
+      "host": "127.0.0.1",
+      "protocolo": "rdp",
+      "tls": false,
+      "processo": "sim-rdp",
+      "falhas_plantadas": [],
+      "eigan_deve_reportar": [
+        "(RDP exposto e informativo/medio: o servico existe)"
+      ],
+      "eigan_nao_deve_reportar": [
+        "RDP sem NLA"
+      ],
+      "ressalvas": [],
+      "como_verificar": "verificar.py --so sim-rdp"
+    },
+    {
+      "id": "sim-mssql-inseguro",
+      "servico": "mssql",
+      "variante": "",
+      "modo": "inseguro",
+      "tipo": "simulado",
+      "software": "SIMULADO (Python, bytes fixos de handshake; nao e o software real)",
+      "porta_var": "PORT_SIM_MSSQL_INS",
+      "porta": 11433,
+      "host": "127.0.0.1",
+      "protocolo": "mssql",
+      "tls": false,
+      "processo": "sim-mssql",
+      "falhas_plantadas": [
+        "PRELOGIN: versao 11.0.2100 (SQL Server 2012 RTM, fora de suporte), ENCRYPT_NOT_SUP"
+      ],
+      "eigan_deve_reportar": [
+        "SQL Server exposto",
+        "versao fora de suporte / sem patches",
+        "sem criptografia"
+      ],
+      "eigan_nao_deve_reportar": [],
+      "ressalvas": [],
+      "como_verificar": "verificar.py --so sim-mssql"
+    },
+    {
+      "id": "sim-mssql-endurecido",
+      "servico": "mssql",
+      "variante": "",
+      "modo": "endurecido",
+      "tipo": "simulado",
+      "software": "SIMULADO (Python, bytes fixos de handshake; nao e o software real)",
+      "porta_var": "PORT_SIM_MSSQL_END",
+      "porta": 11434,
+      "host": "127.0.0.1",
+      "protocolo": "mssql",
+      "tls": false,
+      "processo": "sim-mssql",
+      "falhas_plantadas": [],
+      "eigan_deve_reportar": [
+        "(banco exposto e informativo: o servico existe)"
+      ],
+      "eigan_nao_deve_reportar": [
+        "versao fora de suporte",
+        "criptografia ausente (ENCRYPT_REQ)"
+      ],
+      "ressalvas": [],
+      "como_verificar": "verificar.py --so sim-mssql"
+    },
+    {
+      "id": "sim-vnc-inseguro",
+      "servico": "vnc",
+      "variante": "",
+      "modo": "inseguro",
+      "tipo": "simulado",
+      "software": "SIMULADO (Python, bytes fixos de handshake; nao e o software real)",
+      "porta_var": "PORT_SIM_VNC_INS",
+      "porta": 15900,
+      "host": "127.0.0.1",
+      "protocolo": "vnc",
+      "tls": false,
+      "processo": "sim-vnc",
+      "falhas_plantadas": [
+        "RFB 003.008 oferecendo apenas seguranca None (sem senha)"
+      ],
+      "eigan_deve_reportar": [
+        "VNC sem autenticacao (critico)"
+      ],
+      "eigan_nao_deve_reportar": [],
+      "ressalvas": [],
+      "como_verificar": "verificar.py --so sim-vnc"
+    },
+    {
+      "id": "sim-vnc-endurecido",
+      "servico": "vnc",
+      "variante": "",
+      "modo": "endurecido",
+      "tipo": "simulado",
+      "software": "SIMULADO (Python, bytes fixos de handshake; nao e o software real)",
+      "porta_var": "PORT_SIM_VNC_END",
+      "porta": 15901,
+      "host": "127.0.0.1",
+      "protocolo": "vnc",
+      "tls": false,
+      "processo": "sim-vnc",
+      "falhas_plantadas": [],
+      "eigan_deve_reportar": [
+        "(VNC exposto e medio/informativo)"
+      ],
+      "eigan_nao_deve_reportar": [
+        "VNC sem autenticacao"
+      ],
+      "ressalvas": [],
+      "como_verificar": "verificar.py --so sim-vnc"
+    },
+    {
+      "id": "sim-docker-inseguro",
+      "servico": "docker-api",
+      "variante": "",
+      "modo": "inseguro",
+      "tipo": "simulado",
+      "software": "SIMULADO (Python, bytes fixos de handshake; nao e o software real)",
+      "porta_var": "PORT_SIM_DOCKER_INS",
+      "porta": 12375,
+      "host": "127.0.0.1",
+      "protocolo": "http",
+      "tls": false,
+      "processo": "sim-docker",
+      "falhas_plantadas": [
+        "Docker Engine API v1.41 em HTTP, sem TLS e sem autenticacao (/version, /info, /containers/json)"
+      ],
+      "eigan_deve_reportar": [
+        "API do Docker exposta sem autenticacao (critico: equivale a root no host)",
+        "versao 20.10.7"
+      ],
+      "eigan_nao_deve_reportar": [],
+      "ressalvas": [],
+      "como_verificar": "curl http://127.0.0.1:12375/version"
+    },
+    {
+      "id": "sim-docker-endurecido",
+      "servico": "docker-api",
+      "variante": "",
+      "modo": "endurecido",
+      "tipo": "simulado",
+      "software": "SIMULADO (Python, bytes fixos de handshake; nao e o software real)",
+      "porta_var": "PORT_SIM_DOCKER_END",
+      "porta": 12376,
+      "host": "127.0.0.1",
+      "protocolo": "https",
+      "tls": true,
+      "processo": "sim-docker",
+      "falhas_plantadas": [],
+      "eigan_deve_reportar": [],
+      "eigan_nao_deve_reportar": [
+        "API do Docker sem autenticacao (TLS exige certificado de cliente)"
+      ],
+      "ressalvas": [],
+      "como_verificar": "curl -k https://127.0.0.1:12376/version  # falha de handshake"
+    },
+    {
+      "id": "sim-k8s-inseguro",
+      "servico": "kubernetes-api",
+      "variante": "",
+      "modo": "inseguro",
+      "tipo": "simulado",
+      "software": "SIMULADO (Python, bytes fixos de handshake; nao e o software real)",
+      "porta_var": "PORT_SIM_K8S_INS",
+      "porta": 16443,
+      "host": "127.0.0.1",
+      "protocolo": "https",
+      "tls": true,
+      "processo": "sim-k8s",
+      "falhas_plantadas": [
+        "/version e /api/v1/namespaces respondem a anonimos",
+        "certificado autoassinado",
+        "v1.19.0 (fora de suporte)"
+      ],
+      "eigan_deve_reportar": [
+        "API server do Kubernetes com acesso anonimo",
+        "versao v1.19 fora de suporte"
+      ],
+      "eigan_nao_deve_reportar": [],
+      "ressalvas": [],
+      "como_verificar": "curl -k https://127.0.0.1:16443/api/v1/namespaces"
+    },
+    {
+      "id": "sim-k8s-endurecido",
+      "servico": "kubernetes-api",
+      "variante": "",
+      "modo": "endurecido",
+      "tipo": "simulado",
+      "software": "SIMULADO (Python, bytes fixos de handshake; nao e o software real)",
+      "porta_var": "PORT_SIM_K8S_END",
+      "porta": 16444,
+      "host": "127.0.0.1",
+      "protocolo": "https",
+      "tls": true,
+      "processo": "sim-k8s",
+      "falhas_plantadas": [],
+      "eigan_deve_reportar": [
+        "(API exposta e informativa)"
+      ],
+      "eigan_nao_deve_reportar": [
+        "acesso anonimo (401)"
+      ],
+      "ressalvas": [],
+      "como_verificar": "curl -k https://127.0.0.1:16444/version  # 401"
+    },
+    {
+      "id": "sim-telnet-inseguro",
+      "servico": "telnet",
+      "variante": "",
+      "modo": "inseguro",
+      "tipo": "simulado",
+      "software": "SIMULADO (Python, bytes fixos de handshake; nao e o software real)",
+      "porta_var": "PORT_SIM_TELNET_INS",
+      "porta": 12323,
+      "host": "127.0.0.1",
+      "protocolo": "telnet",
+      "tls": false,
+      "processo": "sim-telnet",
+      "falhas_plantadas": [
+        "Telnet em texto claro, banner Ubuntu 14.04.6 LTS"
+      ],
+      "eigan_deve_reportar": [
+        "Telnet exposto (texto claro, critico/alto)",
+        "sistema operacional fora de suporte no banner"
+      ],
+      "eigan_nao_deve_reportar": [],
+      "ressalvas": [],
+      "como_verificar": "nc 127.0.0.1 12323"
+    },
+    {
+      "id": "sim-smtp-inseguro",
+      "servico": "smtp",
+      "variante": "",
+      "modo": "inseguro",
+      "tipo": "simulado",
+      "software": "SIMULADO (Python, bytes fixos de handshake; nao e o software real)",
+      "porta_var": "PORT_SIM_SMTP_INS",
+      "porta": 12525,
+      "host": "127.0.0.1",
+      "protocolo": "smtp",
+      "tls": false,
+      "processo": "sim-smtp",
+      "falhas_plantadas": [
+        "sem STARTTLS",
+        "aceita RCPT externo (retransmissao aparente)",
+        "VRFY/EXPN habilitados",
+        "banner Sendmail 8.13.8"
+      ],
+      "eigan_deve_reportar": [
+        "SMTP sem STARTTLS",
+        "possivel open relay (so se o EIGAN fizer MAIL FROM/RCPT TO sem DATA)",
+        "VRFY habilitado",
+        "versao antiga no banner"
+      ],
+      "eigan_nao_deve_reportar": [
+        "enviar e-mail de verdade (DATA)"
+      ],
+      "ressalvas": [],
+      "como_verificar": "verificar.py --so sim-smtp"
+    },
+    {
+      "id": "sim-smtp-endurecido",
+      "servico": "smtp",
+      "variante": "",
+      "modo": "endurecido",
+      "tipo": "simulado",
+      "software": "SIMULADO (Python, bytes fixos de handshake; nao e o software real)",
+      "porta_var": "PORT_SIM_SMTP_END",
+      "porta": 12526,
+      "host": "127.0.0.1",
+      "protocolo": "smtp",
+      "tls": true,
+      "processo": "sim-smtp",
+      "falhas_plantadas": [],
+      "eigan_deve_reportar": [],
+      "eigan_nao_deve_reportar": [
+        "sem STARTTLS (e anunciado e funciona)",
+        "open relay (554 5.7.1)",
+        "VRFY revelando usuarios"
+      ],
+      "ressalvas": [
+        "certificado da CA do lab"
+      ],
+      "como_verificar": "verificar.py --so sim-smtp"
+    },
+    {
+      "id": "sim-elastic-inseguro",
+      "servico": "elasticsearch",
+      "variante": "",
+      "modo": "inseguro",
+      "tipo": "simulado",
+      "software": "SIMULADO (Python, bytes fixos de handshake; nao e o software real)",
+      "porta_var": "PORT_SIM_ELASTIC_INS",
+      "porta": 19200,
+      "host": "127.0.0.1",
+      "protocolo": "http",
+      "tls": false,
+      "processo": "sim-elastic",
+      "falhas_plantadas": [
+        "REST sem autenticacao: versao 7.10.0, cluster health, indices"
+      ],
+      "eigan_deve_reportar": [
+        "Elasticsearch sem autenticacao (critico)",
+        "indices listaveis",
+        "versao exposta"
+      ],
+      "eigan_nao_deve_reportar": [],
+      "ressalvas": [],
+      "como_verificar": "curl http://127.0.0.1:19200/"
+    },
+    {
+      "id": "sim-elastic-endurecido",
+      "servico": "elasticsearch",
+      "variante": "",
+      "modo": "endurecido",
+      "tipo": "simulado",
+      "software": "SIMULADO (Python, bytes fixos de handshake; nao e o software real)",
+      "porta_var": "PORT_SIM_ELASTIC_END",
+      "porta": 19201,
+      "host": "127.0.0.1",
+      "protocolo": "http",
+      "tls": false,
+      "processo": "sim-elastic",
+      "falhas_plantadas": [],
+      "eigan_deve_reportar": [],
+      "eigan_nao_deve_reportar": [
+        "Elasticsearch sem autenticacao (401)"
+      ],
+      "ressalvas": [
+        "sem TLS (informativo)"
+      ],
+      "como_verificar": "curl -i http://127.0.0.1:19201/  # 401"
+    },
+    {
+      "id": "sim-winrm-inseguro",
+      "servico": "winrm",
+      "variante": "",
+      "modo": "inseguro",
+      "tipo": "simulado",
+      "software": "SIMULADO (Python, bytes fixos de handshake; nao e o software real)",
+      "porta_var": "PORT_SIM_WINRM_INS",
+      "porta": 15985,
+      "host": "127.0.0.1",
+      "protocolo": "http",
+      "tls": false,
+      "processo": "sim-winrm",
+      "falhas_plantadas": [
+        "/wsman em HTTP puro anunciando Basic (WWW-Authenticate: Negotiate, Basic)"
+      ],
+      "eigan_deve_reportar": [
+        "WinRM em HTTP sem TLS",
+        "autenticacao Basic habilitada"
+      ],
+      "eigan_nao_deve_reportar": [],
+      "ressalvas": [],
+      "como_verificar": "curl -i -X POST http://127.0.0.1:15985/wsman"
+    },
+    {
+      "id": "banner-http-apache-2449",
+      "servico": "banner",
+      "variante": "banner",
+      "modo": "inseguro",
+      "tipo": "simulado",
+      "software": "SIMULADO (so o banner: Server: Apache/2.4.49 (Unix)); nenhum codigo vulneravel",
+      "porta_var": "PORT_BANNER_HTTP_APACHE",
+      "porta": 18999,
+      "host": "127.0.0.1",
+      "protocolo": "http",
+      "tls": false,
+      "processo": "sim-banners",
+      "falhas_plantadas": [
+        "versao Apache 2.4.49 (somente o cabecalho)"
+      ],
+      "eigan_deve_reportar": [
+        "Apache 2.4.49 afetado por CVE-2021-41773 (e CVE-2021-42013, que afeta 2.4.49 e 2.4.50): VERIFICADO em https://httpd.apache.org/security/vulnerabilities_24.html; a regra de versao deve disparar pelo banner, sem explorar"
+      ],
+      "eigan_nao_deve_reportar": [
+        "tentar explorar a falha historica"
+      ],
+      "ressalvas": [
+        "as CVEs citadas nesta linha sao as esperadas pela regra; o estagio de testes deve confirmar contra a base vendorizada do EIGAN"
+      ],
+      "como_verificar": ""
+    },
+    {
+      "id": "banner-http-nginx-1161",
+      "servico": "banner",
+      "variante": "banner",
+      "modo": "inseguro",
+      "tipo": "simulado",
+      "software": "SIMULADO (so o banner: Server: nginx/1.16.1); nenhum codigo vulneravel",
+      "porta_var": "PORT_BANNER_HTTP_NGINX",
+      "porta": 18998,
+      "host": "127.0.0.1",
+      "protocolo": "http",
+      "tls": false,
+      "processo": "sim-banners",
+      "falhas_plantadas": [
+        "versao nginx 1.16.1 (somente o cabecalho)"
+      ],
+      "eigan_deve_reportar": [
+        "nginx 1.16.1 fora de suporte/com CVEs na base vendorizada"
+      ],
+      "eigan_nao_deve_reportar": [
+        "tentar explorar a falha historica"
+      ],
+      "ressalvas": [
+        "as CVEs citadas nesta linha sao as esperadas pela regra; o estagio de testes deve confirmar contra a base vendorizada do EIGAN"
+      ],
+      "como_verificar": ""
+    },
+    {
+      "id": "banner-ftp-vsftpd-234",
+      "servico": "banner",
+      "variante": "banner",
+      "modo": "inseguro",
+      "tipo": "simulado",
+      "software": "SIMULADO (so o banner: 220 (vsFTPd 2.3.4)); nenhum codigo vulneravel",
+      "porta_var": "PORT_BANNER_FTP_VSFTPD",
+      "porta": 12199,
+      "host": "127.0.0.1",
+      "protocolo": "ftp",
+      "tls": false,
+      "processo": "sim-banners",
+      "falhas_plantadas": [
+        "banner vsFTPd 2.3.4 (SEM a porta dos fundos; recusa todo login)"
+      ],
+      "eigan_deve_reportar": [
+        "vsFTPd 2.3.4 (versao historicamente comprometida; CVE-2011-2523 NAO VERIFICADO em fonte primaria pelo lab: NVD e JS e security.appspot.com/vsftpd.html nao cita o CVE) por regra de banner, sem tentar explorar"
+      ],
+      "eigan_nao_deve_reportar": [
+        "tentar explorar a falha historica"
+      ],
+      "ressalvas": [
+        "as CVEs citadas nesta linha sao as esperadas pela regra; o estagio de testes deve confirmar contra a base vendorizada do EIGAN"
+      ],
+      "como_verificar": ""
+    },
+    {
+      "id": "banner-ftp-proftpd-135",
+      "servico": "banner",
+      "variante": "banner",
+      "modo": "inseguro",
+      "tipo": "simulado",
+      "software": "SIMULADO (so o banner: 220 ProFTPD 1.3.5 Server (Debian)); nenhum codigo vulneravel",
+      "porta_var": "PORT_BANNER_FTP_PROFTPD",
+      "porta": 12198,
+      "host": "127.0.0.1",
+      "protocolo": "ftp",
+      "tls": false,
+      "processo": "sim-banners",
+      "falhas_plantadas": [
+        "banner ProFTPD 1.3.5"
+      ],
+      "eigan_deve_reportar": [
+        "ProFTPD 1.3.5 desatualizado por regra de banner"
+      ],
+      "eigan_nao_deve_reportar": [
+        "tentar explorar a falha historica"
+      ],
+      "ressalvas": [
+        "as CVEs citadas nesta linha sao as esperadas pela regra; o estagio de testes deve confirmar contra a base vendorizada do EIGAN"
+      ],
+      "como_verificar": ""
+    },
+    {
+      "id": "banner-ssh-openssh-72",
+      "servico": "banner",
+      "variante": "banner",
+      "modo": "inseguro",
+      "tipo": "simulado",
+      "software": "SIMULADO (so o banner: SSH-2.0-OpenSSH_7.2p2 Ubuntu-4ubuntu2.10 + KEXINIT legado); nenhum codigo vulneravel",
+      "porta_var": "PORT_BANNER_SSH_OLD",
+      "porta": 12299,
+      "host": "127.0.0.1",
+      "protocolo": "ssh",
+      "tls": false,
+      "processo": "sim-banners",
+      "falhas_plantadas": [
+        "OpenSSH 7.2p2 + KEX group1-sha1, 3des/blowfish/arcfour, ssh-dss, hmac-md5"
+      ],
+      "eigan_deve_reportar": [
+        "OpenSSH 7.2p2 desatualizado e algoritmos obsoletos"
+      ],
+      "eigan_nao_deve_reportar": [
+        "tentar explorar a falha historica"
+      ],
+      "ressalvas": [
+        "as CVEs citadas nesta linha sao as esperadas pela regra; o estagio de testes deve confirmar contra a base vendorizada do EIGAN"
+      ],
+      "como_verificar": ""
+    },
+    {
+      "id": "banner-smtp-exim-487",
+      "servico": "banner",
+      "variante": "banner",
+      "modo": "inseguro",
+      "tipo": "simulado",
+      "software": "SIMULADO (so o banner: 220 ... ESMTP Exim 4.87); nenhum codigo vulneravel",
+      "porta_var": "PORT_BANNER_SMTP_EXIM",
+      "porta": 12597,
+      "host": "127.0.0.1",
+      "protocolo": "smtp",
+      "tls": false,
+      "processo": "sim-banners",
+      "falhas_plantadas": [
+        "banner Exim 4.87"
+      ],
+      "eigan_deve_reportar": [
+        "Exim 4.87 desatualizado por regra de banner"
+      ],
+      "eigan_nao_deve_reportar": [
+        "tentar explorar a falha historica"
+      ],
+      "ressalvas": [
+        "as CVEs citadas nesta linha sao as esperadas pela regra; o estagio de testes deve confirmar contra a base vendorizada do EIGAN"
+      ],
+      "como_verificar": ""
+    },
+    {
+      "id": "banner-smtp-postfix",
+      "servico": "banner",
+      "variante": "banner",
+      "modo": "inseguro",
+      "tipo": "simulado",
+      "software": "SIMULADO (so o banner: 220 ... ESMTP Postfix (Ubuntu)); nenhum codigo vulneravel",
+      "porta_var": "PORT_BANNER_SMTP_POSTFIX",
+      "porta": 12598,
+      "host": "127.0.0.1",
+      "protocolo": "smtp",
+      "tls": false,
+      "processo": "sim-banners",
+      "falhas_plantadas": [
+        "banner Postfix sem versao"
+      ],
+      "eigan_deve_reportar": [
+        "nada de versao (so identifica o produto)"
+      ],
+      "eigan_nao_deve_reportar": [
+        "tentar explorar a falha historica"
+      ],
+      "ressalvas": [
+        "as CVEs citadas nesta linha sao as esperadas pela regra; o estagio de testes deve confirmar contra a base vendorizada do EIGAN"
+      ],
+      "como_verificar": ""
+    },
+    {
+      "id": "banner-mysql-5173",
+      "servico": "banner",
+      "variante": "banner",
+      "modo": "inseguro",
+      "tipo": "simulado",
+      "software": "SIMULADO (so o banner: handshake v10 com 5.1.73-lab); nenhum codigo vulneravel",
+      "porta_var": "PORT_BANNER_MYSQL_OLD",
+      "porta": 13399,
+      "host": "127.0.0.1",
+      "protocolo": "mysql",
+      "tls": false,
+      "processo": "sim-banners",
+      "falhas_plantadas": [
+        "versao MySQL 5.1.73"
+      ],
+      "eigan_deve_reportar": [
+        "MySQL 5.1 fim de vida por regra de versao"
+      ],
+      "eigan_nao_deve_reportar": [
+        "tentar explorar a falha historica"
+      ],
+      "ressalvas": [
+        "as CVEs citadas nesta linha sao as esperadas pela regra; o estagio de testes deve confirmar contra a base vendorizada do EIGAN"
+      ],
+      "como_verificar": ""
+    },
+    {
+      "id": "banner-redis-2819",
+      "servico": "banner",
+      "variante": "banner",
+      "modo": "inseguro",
+      "tipo": "simulado",
+      "software": "SIMULADO (so o banner: INFO com redis_version:2.8.19); nenhum codigo vulneravel",
+      "porta_var": "PORT_BANNER_REDIS_OLD",
+      "porta": 16399,
+      "host": "127.0.0.1",
+      "protocolo": "redis",
+      "tls": false,
+      "processo": "sim-banners",
+      "falhas_plantadas": [
+        "Redis 2.8.19 sem autenticacao"
+      ],
+      "eigan_deve_reportar": [
+        "Redis antigo e sem autenticacao"
+      ],
+      "eigan_nao_deve_reportar": [
+        "tentar explorar a falha historica"
+      ],
+      "ressalvas": [
+        "as CVEs citadas nesta linha sao as esperadas pela regra; o estagio de testes deve confirmar contra a base vendorizada do EIGAN"
+      ],
+      "como_verificar": ""
+    }
+  ],
+  "alvos_estaticos": [
+    {
+      "id": "projeto-vulneravel",
+      "caminho": "tests/lab/alvos/projeto-vulneravel",
+      "tipo": "codigo-estatico",
+      "gerador": "ferramentas/gerar_alvos.py",
+      "falhas_plantadas": [
+        "dependencias fixadas com versoes antigas em npm (lodash 4.17.15, minimist 1.2.0, express 4.16.0, jquery 3.3.1, moment 2.19.2, axios 0.18.0, handlebars 4.0.11), pip (Django 2.2.0, Flask 0.12.2, PyYAML 5.3, requests 2.19.0, Pillow 8.0.0, urllib3 1.24.1, Jinja2 2.10, Werkzeug 0.14.1), Maven (log4j-core 2.14.1, jackson-databind 2.9.8, spring-beans 5.3.17, commons-collections 3.2.1, snakeyaml 1.26), Go (x/text 0.3.0, yaml.v2 2.2.2), RubyGems (nokogiri 1.10.0, rails 5.2.0), Cargo (regex 1.5.4, smallvec 0.6.9, time 0.1.43), Composer (guzzle 6.3.0), NuGet (Newtonsoft.Json 9.0.1, log4net 2.0.8, System.Text.RegularExpressions 4.3.0)",
+        "Dockerfile: FROM node:8, USER root, ENV com senha/token, ADD de URL, curl|sh, chmod 777, EXPOSE 22",
+        "docker-compose: privileged, network_mode host, pid host, docker.sock montado, / montado, MySQL em 0.0.0.0",
+        "Kubernetes: hostNetwork/hostPID, privileged, runAsUser 0, hostPath /, :latest, senha em env, ClusterRoleBinding cluster-admin para a SA default",
+        "Terraform: S3 public-read, SG 22/3389 para 0.0.0.0/0, RDS publico e sem criptografia, IAM '*', EBS sem criptografia, chave de acesso de EXEMPLO da documentacao da AWS",
+        "configs: nginx (SSLv3/TLSv1, autoindex), sshd (root/senha vazia/cifras fracas), redis (bind 0.0.0.0, sem senha), my.cnf (skip-grant-tables), php.ini, httpd.conf, .env",
+        "codigo inseguro em Python, JavaScript, Java, PHP, Go, C#, Ruby, Shell e C (eval, injecao de comando, SQL por concatenacao, desserializacao, hash MD5, TLS sem verificacao, XXE, XSS, buffer overflow)",
+        "segredos fixos obviamente falsos (FAKE-lab-...) em varios arquivos"
+      ],
+      "eigan_deve_reportar": [
+        "CVEs/avisos nas dependencias de cada ecossistema",
+        "problemas em Dockerfile, compose, Kubernetes e Terraform",
+        "configuracoes inseguras",
+        "padroes de codigo inseguro por linguagem",
+        "segredos expostos (senhas/chaves em texto)"
+      ],
+      "eigan_nao_deve_reportar": [
+        "marcar como segredo reais os textos de exemplo da documentacao da AWS como se fossem credenciais ativas (se o EIGAN os trata como exemplo, tudo bem)"
+      ],
+      "ressalvas": [
+        "os identificadores exatos de CVE/GHSA para cada versao devem ser confirmados no estagio de testes contra a base vendorizada; as versoes foram escolhidas por serem publicamente conhecidas como afetadas"
+      ]
+    },
+    {
+      "id": "segredos-gerados",
+      "caminho": "tests/lab/alvos/_gerado/segredos",
+      "tipo": "segredos-falsos-gerados",
+      "gerador": "ferramentas/gerar_alvos.py --segredos (nao versionado)",
+      "falhas_plantadas": [
+        "tokens FALSOS com formato real: AWS (AKIA+16), GitHub PAT, GitLab PAT, Slack bot, Stripe live, Google API, npm, SendGrid, JWT, chave privada RSA descartavel, senha em URL/propriedades"
+      ],
+      "eigan_deve_reportar": [
+        "cada tipo de segredo identificado pelo formato, mascarado na evidencia"
+      ],
+      "eigan_nao_deve_reportar": [
+        "limpo/config.yml (placeholders, variaveis de ambiente e exemplo AKIAXXXX)"
+      ],
+      "ressalvas": [
+        "gerados em tempo de execucao para nao disparar a protecao de push do GitHub; rode instalar/subir ou 'python ferramentas/gerar_alvos.py --segredos'"
+      ]
+    },
+    {
+      "id": "projeto-limpo",
+      "caminho": "tests/lab/alvos/projeto-limpo",
+      "tipo": "codigo-estatico-gemeo",
+      "gerador": "ferramentas/gerar_alvos.py",
+      "falhas_plantadas": [],
+      "eigan_deve_reportar": [],
+      "eigan_nao_deve_reportar": [
+        "achados de dependencias (versoes recentes na data de criacao)",
+        "Dockerfile/compose/k8s/terraform sem problemas",
+        "codigo com consultas parametrizadas, secrets, subprocess sem shell, yaml.safe_load",
+        "segredos (usa variaveis de ambiente)"
+      ],
+      "ressalvas": [
+        "se uma versao 'limpa' ganhar CVE depois, atualize em gerar_alvos.py: o objetivo do gemeo e nao ter achados NA DATA da base vendorizada"
+      ]
+    },
+    {
+      "id": "log-linux-auth-ataque",
+      "caminho": "tests/lab/alvos/logs/linux/auth-ataque.log",
+      "tipo": "log-ataque",
+      "formato": "syslog Linux",
+      "gerador": "ferramentas/gerar_logs.py",
+      "falhas_plantadas": [
+        "forca bruta SSH (160 falhas de 203.0.113.50 + ataque lento de 3 IPs), 'POSSIBLE BREAK-IN ATTEMPT', login com sucesso apos as falhas, sudo, useradd/usermod de conta de persistencia, su falho"
+      ],
+      "eigan_deve_reportar": [
+        "os rastros descritos em falhas_plantadas (forca bruta, injecoes, scanners, persistencia, limpeza de log)"
+      ],
+      "eigan_nao_deve_reportar": [],
+      "ressalvas": [
+        "IPs 192.0.2.0/24, 198.51.100.0/24 e 203.0.113.0/24 (RFC 5737)"
+      ]
+    },
+    {
+      "id": "log-linux-auth-benigno",
+      "caminho": "tests/lab/alvos/logs/linux/auth-benigno.log",
+      "tipo": "log-benigno",
+      "formato": "syslog Linux",
+      "gerador": "ferramentas/gerar_logs.py",
+      "falhas_plantadas": [],
+      "eigan_deve_reportar": [],
+      "eigan_nao_deve_reportar": [
+        "forca bruta, ataques, escalonamento ou persistencia: cron, login por chave, sudo normal e 3 erros de senha seguidos de acerto (humano)"
+      ],
+      "ressalvas": [
+        "IPs 192.0.2.0/24, 198.51.100.0/24 e 203.0.113.0/24 (RFC 5737)"
+      ]
+    },
+    {
+      "id": "log-web-nginx-access-ataque",
+      "caminho": "tests/lab/alvos/logs/web/nginx-access-ataque.log",
+      "tipo": "log-ataque",
+      "formato": "nginx combined",
+      "gerador": "ferramentas/gerar_logs.py",
+      "falhas_plantadas": [
+        "SQLi, traversal, varreduras de .env/.git/backup, scanners (sqlmap, nikto, nmap, zgrab, masscan, gobuster), Log4Shell, Shellshock, CVE-2021-41773-like, XSS, webshell, Spring4Shell-like, forca bruta de wp-login e xmlrpc, varredura 404, rajada 500"
+      ],
+      "eigan_deve_reportar": [
+        "os rastros descritos em falhas_plantadas (forca bruta, injecoes, scanners, persistencia, limpeza de log)"
+      ],
+      "eigan_nao_deve_reportar": [],
+      "ressalvas": [
+        "IPs 192.0.2.0/24, 198.51.100.0/24 e 203.0.113.0/24 (RFC 5737)"
+      ]
+    },
+    {
+      "id": "log-web-nginx-access-benigno",
+      "caminho": "tests/lab/alvos/logs/web/nginx-access-benigno.log",
+      "tipo": "log-benigno",
+      "formato": "nginx combined",
+      "gerador": "ferramentas/gerar_logs.py",
+      "falhas_plantadas": [],
+      "eigan_deve_reportar": [],
+      "eigan_nao_deve_reportar": [
+        "forca bruta, ataques, escalonamento ou persistencia: 260 acessos normais"
+      ],
+      "ressalvas": [
+        "IPs 192.0.2.0/24, 198.51.100.0/24 e 203.0.113.0/24 (RFC 5737)"
+      ]
+    },
+    {
+      "id": "log-web-apache-access-ataque",
+      "caminho": "tests/lab/alvos/logs/web/apache-access-ataque.log",
+      "tipo": "log-ataque",
+      "formato": "apache combined",
+      "gerador": "ferramentas/gerar_logs.py",
+      "falhas_plantadas": [
+        "mesmo conteudo do nginx (formato combinado)"
+      ],
+      "eigan_deve_reportar": [
+        "os rastros descritos em falhas_plantadas (forca bruta, injecoes, scanners, persistencia, limpeza de log)"
+      ],
+      "eigan_nao_deve_reportar": [],
+      "ressalvas": [
+        "IPs 192.0.2.0/24, 198.51.100.0/24 e 203.0.113.0/24 (RFC 5737)"
+      ]
+    },
+    {
+      "id": "log-web-apache-access-benigno",
+      "caminho": "tests/lab/alvos/logs/web/apache-access-benigno.log",
+      "tipo": "log-benigno",
+      "formato": "apache combined",
+      "gerador": "ferramentas/gerar_logs.py",
+      "falhas_plantadas": [],
+      "eigan_deve_reportar": [],
+      "eigan_nao_deve_reportar": [
+        "forca bruta, ataques, escalonamento ou persistencia: acessos normais"
+      ],
+      "ressalvas": [
+        "IPs 192.0.2.0/24, 198.51.100.0/24 e 203.0.113.0/24 (RFC 5737)"
+      ]
+    },
+    {
+      "id": "log-web-apache-error-ataque",
+      "caminho": "tests/lab/alvos/logs/web/apache-error-ataque.log",
+      "tipo": "log-ataque",
+      "formato": "apache error",
+      "gerador": "ferramentas/gerar_logs.py",
+      "falhas_plantadas": [
+        "URI invalida, erro de SQL, acesso negado a /etc/shadow, ModSecurity Log4Shell"
+      ],
+      "eigan_deve_reportar": [
+        "os rastros descritos em falhas_plantadas (forca bruta, injecoes, scanners, persistencia, limpeza de log)"
+      ],
+      "eigan_nao_deve_reportar": [],
+      "ressalvas": [
+        "IPs 192.0.2.0/24, 198.51.100.0/24 e 203.0.113.0/24 (RFC 5737)"
+      ]
+    },
+    {
+      "id": "log-web-apache-error-benigno",
+      "caminho": "tests/lab/alvos/logs/web/apache-error-benigno.log",
+      "tipo": "log-benigno",
+      "formato": "apache error",
+      "gerador": "ferramentas/gerar_logs.py",
+      "falhas_plantadas": [],
+      "eigan_deve_reportar": [],
+      "eigan_nao_deve_reportar": [
+        "forca bruta, ataques, escalonamento ou persistencia: somente mensagens de inicio"
+      ],
+      "ressalvas": [
+        "IPs 192.0.2.0/24, 198.51.100.0/24 e 203.0.113.0/24 (RFC 5737)"
+      ]
+    },
+    {
+      "id": "log-iis-u_ex261102-ataque",
+      "caminho": "tests/lab/alvos/logs/iis/u_ex261102-ataque.log",
+      "tipo": "log-ataque",
+      "formato": "IIS W3C",
+      "gerador": "ferramentas/gerar_logs.py",
+      "falhas_plantadas": [
+        "forca bruta OWA (80x 401 e depois 302), ProxyLogon-like, SQLi com WAITFOR, traversal, webshell aspx, scanner Nmap"
+      ],
+      "eigan_deve_reportar": [
+        "os rastros descritos em falhas_plantadas (forca bruta, injecoes, scanners, persistencia, limpeza de log)"
+      ],
+      "eigan_nao_deve_reportar": [],
+      "ressalvas": [
+        "IPs 192.0.2.0/24, 198.51.100.0/24 e 203.0.113.0/24 (RFC 5737)"
+      ]
+    },
+    {
+      "id": "log-iis-u_ex261102-benigno",
+      "caminho": "tests/lab/alvos/logs/iis/u_ex261102-benigno.log",
+      "tipo": "log-benigno",
+      "formato": "IIS W3C",
+      "gerador": "ferramentas/gerar_logs.py",
+      "falhas_plantadas": [],
+      "eigan_deve_reportar": [],
+      "eigan_nao_deve_reportar": [
+        "forca bruta, ataques, escalonamento ou persistencia: acessos normais"
+      ],
+      "ressalvas": [
+        "IPs 192.0.2.0/24, 198.51.100.0/24 e 203.0.113.0/24 (RFC 5737)"
+      ]
+    },
+    {
+      "id": "log-windows-eventos-ataque",
+      "caminho": "tests/lab/alvos/logs/windows/eventos-ataque.xml",
+      "tipo": "log-ataque",
+      "formato": "Windows Event XML",
+      "gerador": "ferramentas/gerar_logs.py",
+      "falhas_plantadas": [
+        "4625 x90 tipo 3, 4624 tipo 10, 4672, 4720, 4732 (Administrators), 4688 (whoami /priv, net user /add, powershell -enc, vssadmin delete shadows, procdump lsass, wevtutil cl), 4698, 7045, 1102"
+      ],
+      "eigan_deve_reportar": [
+        "os rastros descritos em falhas_plantadas (forca bruta, injecoes, scanners, persistencia, limpeza de log)"
+      ],
+      "eigan_nao_deve_reportar": [],
+      "ressalvas": [
+        "IPs 192.0.2.0/24, 198.51.100.0/24 e 203.0.113.0/24 (RFC 5737)"
+      ]
+    },
+    {
+      "id": "log-windows-eventos-ataque",
+      "caminho": "tests/lab/alvos/logs/windows/eventos-ataque.csv",
+      "tipo": "log-ataque",
+      "formato": "Windows Event CSV",
+      "gerador": "ferramentas/gerar_logs.py",
+      "falhas_plantadas": [
+        "mesmo conteudo do XML em CSV (Get-WinEvent | Export-Csv)"
+      ],
+      "eigan_deve_reportar": [
+        "os rastros descritos em falhas_plantadas (forca bruta, injecoes, scanners, persistencia, limpeza de log)"
+      ],
+      "eigan_nao_deve_reportar": [],
+      "ressalvas": [
+        "IPs 192.0.2.0/24, 198.51.100.0/24 e 203.0.113.0/24 (RFC 5737)"
+      ]
+    },
+    {
+      "id": "log-windows-eventos-benigno",
+      "caminho": "tests/lab/alvos/logs/windows/eventos-benigno.xml",
+      "tipo": "log-benigno",
+      "formato": "Windows Event XML",
+      "gerador": "ferramentas/gerar_logs.py",
+      "falhas_plantadas": [],
+      "eigan_deve_reportar": [],
+      "eigan_nao_deve_reportar": [
+        "forca bruta, ataques, escalonamento ou persistencia: logons normais e 2 erros de digitacao"
+      ],
+      "ressalvas": [
+        "IPs 192.0.2.0/24, 198.51.100.0/24 e 203.0.113.0/24 (RFC 5737)"
+      ]
+    },
+    {
+      "id": "log-windows-eventos-benigno",
+      "caminho": "tests/lab/alvos/logs/windows/eventos-benigno.csv",
+      "tipo": "log-benigno",
+      "formato": "Windows Event CSV",
+      "gerador": "ferramentas/gerar_logs.py",
+      "falhas_plantadas": [],
+      "eigan_deve_reportar": [],
+      "eigan_nao_deve_reportar": [
+        "forca bruta, ataques, escalonamento ou persistencia: idem em CSV"
+      ],
+      "ressalvas": [
+        "IPs 192.0.2.0/24, 198.51.100.0/24 e 203.0.113.0/24 (RFC 5737)"
+      ]
+    }
+  ]
+}
