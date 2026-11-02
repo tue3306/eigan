@@ -6,7 +6,7 @@
 #
 # O painel web só escuta em 127.0.0.1 (por segurança), então dentro do container
 # use a linha de comando. Relatórios vão para /dados (monte um volume para guardá-los).
-FROM python:3.12-slim
+FROM python:3.13-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
