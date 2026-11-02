@@ -1,0 +1,287 @@
+{
+  "fonte": "Curadoria própria do EIGAN: faixas de versão, CVEs e datas copiados dos avisos oficiais dos fabricantes e do registro CVE, com os links em 'referencias' de cada regra. A marca KEV não fica aqui: vem do catálogo embarcado kev.json.",
+  "licenca": "Apache-2.0 (mesma licença do EIGAN). Faixas e datas são fatos públicos compilados das fontes citadas; nenhum texto de terceiros foi copiado.",
+  "url": "https://www.cve.org/",
+  "atualizado": "2026-11-02",
+  "_obs": "Faixas: introduzida <= versão < corrigida (ou <= ultima_afetada); 'partes' limita ao número de partes da versão (Jenkins: 2 = semanal, 3 = LTS). 'letras' indica versões com sufixo de letra que vem DEPOIS do número (OpenSSL 1.0.1a, ProFTPD 1.3.5a). 'confianca' é o máximo possível; marca de distribuição no banner rebaixa para 'tentative'. 'condicao' exige uma prova a mais: 'windows' (o host é Windows) ou 'webdav' (OPTIONS anuncia WebDAV). Em 'ramos', 'fim' é AAAA-MM-DD, AAAA-MM ou AAAA.",
+  "apelidos": {
+    "apache": ["apache", "apache2", "apache httpd", "apache-httpd", "apache http server", "httpd"],
+    "iis": ["iis", "microsoft-iis", "microsoft iis"],
+    "jenkins": ["jenkins"],
+    "nginx": ["nginx"],
+    "openssh": ["openssh", "openssh_for_windows"],
+    "openssl": ["openssl"],
+    "php": ["php"],
+    "proftpd": ["proftpd"],
+    "vsftpd": ["vsftpd"],
+    "exim": ["exim"]
+  },
+  "regras": [
+    {
+      "id": "apache-2.4.49",
+      "achado": "net.versao.vulneravel.apache_traversal",
+      "produto": "apache",
+      "faixas": [{ "introduzida": "2.4.49", "ultima_afetada": "2.4.49" }],
+      "cves": ["CVE-2021-41773", "CVE-2021-42013"],
+      "severidade": "critical",
+      "confianca": "firm",
+      "titulo": "Apache httpd {versao} com falha de path traversal (CVE-2021-41773, CVE-2021-42013)",
+      "resumo": "O Apache httpd 2.4.49 permite ler arquivos fora das pastas publicadas quando elas não têm 'Require all denied' e, com CGI ativo, executar comandos no servidor.",
+      "referencias": [
+        "https://httpd.apache.org/security/vulnerabilities_24.html",
+        "https://nvd.nist.gov/vuln/detail/CVE-2021-41773",
+        "https://nvd.nist.gov/vuln/detail/CVE-2021-42013"
+      ]
+    },
+    {
+      "id": "apache-2.4.50",
+      "achado": "net.versao.vulneravel.apache_traversal",
+      "produto": "apache",
+      "faixas": [{ "introduzida": "2.4.50", "ultima_afetada": "2.4.50" }],
+      "cves": ["CVE-2021-42013"],
+      "severidade": "critical",
+      "confianca": "firm",
+      "titulo": "Apache httpd {versao} com correção incompleta de path traversal (CVE-2021-42013)",
+      "resumo": "A correção da falha de path traversal na versão 2.4.50 ficou incompleta: a leitura de arquivos e a execução de comandos via CGI continuam possíveis até a 2.4.51.",
+      "referencias": [
+        "https://httpd.apache.org/security/vulnerabilities_24.html",
+        "https://nvd.nist.gov/vuln/detail/CVE-2021-42013"
+      ]
+    },
+    {
+      "id": "openssl-heartbleed",
+      "achado": "net.versao.vulneravel.openssl_heartbleed",
+      "produto": "openssl",
+      "letras": true,
+      "faixas": [
+        { "introduzida": "1.0.1", "corrigida": "1.0.1g" },
+        { "introduzida": "1.0.2-beta1", "corrigida": "1.0.2-beta2" }
+      ],
+      "cves": ["CVE-2014-0160"],
+      "severidade": "high",
+      "confianca": "tentative",
+      "titulo": "OpenSSL {versao} na faixa do Heartbleed (CVE-2014-0160)",
+      "resumo": "A versão anunciada do OpenSSL está na faixa do Heartbleed, que deixa um atacante ler a memória do servidor. É só um indício: o EIGAN nunca envia o heartbeat malformado e distribuições corrigem a falha sem mudar o número da versão.",
+      "referencias": [
+        "https://openssl-library.org/news/secadv/20140407.txt",
+        "https://nvd.nist.gov/vuln/detail/CVE-2014-0160"
+      ]
+    },
+    {
+      "id": "vsftpd-2.3.4",
+      "achado": "net.versao.vulneravel.vsftpd_backdoor",
+      "produto": "vsftpd",
+      "faixas": [{ "introduzida": "2.3.4", "ultima_afetada": "2.3.4" }],
+      "cves": ["CVE-2011-2523"],
+      "severidade": "high",
+      "confianca": "tentative",
+      "titulo": "vsftpd {versao}: versão ligada à backdoor de 2011 (CVE-2011-2523)",
+      "resumo": "O pacote do vsftpd 2.3.4 baixado entre 30/06/2011 e 03/07/2011 continha uma backdoor. O banner não distingue esse pacote do original e o EIGAN nunca tenta acionar a backdoor: é só um indício a conferir.",
+      "referencias": [
+        "https://nvd.nist.gov/vuln/detail/CVE-2011-2523",
+        "https://www.openwall.com/lists/oss-security/2011/07/11/5",
+        "https://security-tracker.debian.org/tracker/CVE-2011-2523"
+      ]
+    },
+    {
+      "id": "proftpd-1.3.5",
+      "achado": "net.versao.vulneravel.proftpd_mod_copy",
+      "produto": "proftpd",
+      "letras": true,
+      "faixas": [{ "introduzida": "1.3.5", "ultima_afetada": "1.3.5" }],
+      "cves": ["CVE-2015-3306"],
+      "severidade": "high",
+      "confianca": "tentative",
+      "titulo": "ProFTPD {versao} com mod_copy vulnerável (CVE-2015-3306)",
+      "resumo": "No ProFTPD 1.3.5, o módulo mod_copy aceita os comandos SITE CPFR e SITE CPTO sem login, o que permite ler e gravar arquivos no servidor. O EIGAN só lê o banner e nunca envia esses comandos.",
+      "referencias": [
+        "https://nvd.nist.gov/vuln/detail/CVE-2015-3306",
+        "https://github.com/proftpd/proftpd/blob/v1.3.5a/NEWS",
+        "https://www.debian.org/security/2015/dsa-3263"
+      ]
+    },
+    {
+      "id": "exim-4.87-4.91",
+      "achado": "net.versao.vulneravel.exim_rce",
+      "produto": "exim",
+      "faixas": [{ "introduzida": "4.87", "ultima_afetada": "4.91" }],
+      "cves": ["CVE-2019-10149"],
+      "severidade": "high",
+      "confianca": "tentative",
+      "titulo": "Exim {versao} com falha de execução de comandos (CVE-2019-10149)",
+      "resumo": "As versões 4.87 a 4.91 do Exim validam mal o endereço do destinatário, o que pode levar à execução remota de comandos no servidor de e-mail. O projeto também liberou correção para essas versões, sem mudar o número.",
+      "referencias": [
+        "https://www.exim.org/static/doc/security/CVE-2019-10149.txt",
+        "https://nvd.nist.gov/vuln/detail/CVE-2019-10149"
+      ]
+    },
+    {
+      "id": "php-cgi-windows",
+      "achado": "net.versao.vulneravel.php_cgi_windows",
+      "produto": "php",
+      "condicao": "windows",
+      "faixas": [
+        { "introduzida": "5.0", "corrigida": "8.1.0" },
+        { "introduzida": "8.1.0", "corrigida": "8.1.29" },
+        { "introduzida": "8.2.0", "corrigida": "8.2.20" },
+        { "introduzida": "8.3.0", "corrigida": "8.3.8" }
+      ],
+      "cves": ["CVE-2024-4577"],
+      "severidade": "high",
+      "confianca": "tentative",
+      "titulo": "PHP {versao} em Windows: possível injeção de argumentos no PHP-CGI (CVE-2024-4577)",
+      "resumo": "Em Windows, o PHP-CGI permite injetar argumentos e executar comandos quando o sistema usa certas páginas de código (chinês e japonês foram confirmados). O banner não mostra se o PHP roda como CGI: é um indício a conferir.",
+      "referencias": [
+        "https://nvd.nist.gov/vuln/detail/CVE-2024-4577",
+        "https://github.com/php/php-src/security/advisories/GHSA-3qgc-jrrr-25jv",
+        "https://devco.re/blog/2024/06/06/security-alert-cve-2024-4577-php-cgi-argument-injection-vulnerability-en/"
+      ]
+    },
+    {
+      "id": "iis-6.0-webdav",
+      "achado": "net.versao.vulneravel.iis_webdav",
+      "produto": "iis",
+      "condicao": "webdav",
+      "faixas": [{ "introduzida": "6.0", "ultima_afetada": "6.0" }],
+      "cves": ["CVE-2017-7269"],
+      "severidade": "high",
+      "confianca": "firm",
+      "titulo": "IIS {versao} com WebDAV vulnerável (CVE-2017-7269)",
+      "resumo": "O serviço WebDAV do IIS 6.0 tem um estouro de buffer que permite executar comandos remotamente com uma requisição PROPFIND longa. O EIGAN só faz um OPTIONS comum e nunca envia esse PROPFIND.",
+      "referencias": [
+        "https://nvd.nist.gov/vuln/detail/CVE-2017-7269",
+        "https://www.cve.org/CVERecord?id=CVE-2017-7269"
+      ]
+    },
+    {
+      "id": "jenkins-cli",
+      "achado": "net.versao.vulneravel.jenkins_cli",
+      "produto": "jenkins",
+      "faixas": [
+        { "ultima_afetada": "2.441", "partes": 2 },
+        { "ultima_afetada": "2.426.2", "partes": 3 }
+      ],
+      "cves": ["CVE-2024-23897"],
+      "severidade": "high",
+      "confianca": "firm",
+      "titulo": "Jenkins {versao} com leitura de arquivos pela CLI (CVE-2024-23897)",
+      "resumo": "A CLI do Jenkins troca '@caminho' em um argumento pelo conteúdo do arquivo, o que deixa um atacante ler arquivos do controlador e, com as chaves obtidas, chegar à execução de código.",
+      "referencias": [
+        "https://www.jenkins.io/security/advisory/2024-01-24/",
+        "https://nvd.nist.gov/vuln/detail/CVE-2024-23897"
+      ]
+    },
+    {
+      "id": "php-fim-de-vida",
+      "achado": "net.versao.fim_de_vida.php",
+      "produto": "php",
+      "severidade": "high",
+      "confianca": "firm",
+      "titulo": "PHP {versao} sem suporte: {situacao}",
+      "resumo": "Este ramo do PHP chegou ao fim da vida: falhas novas não recebem correção do projeto.",
+      "ramos": [
+        { "ramo": "8.5", "fim": "2029-12-31" },
+        { "ramo": "8.4", "fim": "2028-12-31" },
+        { "ramo": "8.3", "fim": "2027-12-31" },
+        { "ramo": "8.2", "fim": "2026-12-31" },
+        { "ramo": "8.1", "fim": "2025-12-31" },
+        { "ramo": "8.0", "fim": "2023-11-26" },
+        { "ramo": "7.4", "fim": "2022-11-28" },
+        { "ramo": "7.3", "fim": "2021-12-06" },
+        { "ramo": "7.2", "fim": "2020-11-30" },
+        { "ramo": "7.1", "fim": "2019-12-01" },
+        { "ramo": "7.0", "fim": "2019-01-10" },
+        { "ramo": "5.6", "fim": "2018-12-31" },
+        { "ramo": "5.5", "fim": "2016-07-21" },
+        { "ramo": "5.4", "fim": "2015-09-03" },
+        { "ramo": "5.3", "fim": "2014-08-14" },
+        { "ramo": "5.2", "fim": "2011-01-06" },
+        { "ramo": "5.1", "fim": "2006-08-24" },
+        { "ramo": "5.0", "fim": "2005-09-05" },
+        { "ramo": "4.4", "fim": "2008-08-07" },
+        { "ramo": "4.3", "fim": "2005-03-31" },
+        { "ramo": "4.2", "fim": "2002-09-06" },
+        { "ramo": "4.1", "fim": "2002-03-12" },
+        { "ramo": "4.0", "fim": "2001-06-23" },
+        { "ramo": "3.0", "fim": "2000-10-20" }
+      ],
+      "referencias": [
+        "https://www.php.net/eol.php",
+        "https://www.php.net/supported-versions.php"
+      ]
+    },
+    {
+      "id": "apache-fim-de-vida",
+      "achado": "net.versao.fim_de_vida.apache",
+      "produto": "apache",
+      "severidade": "high",
+      "confianca": "firm",
+      "titulo": "Apache httpd {versao} sem suporte: {situacao}",
+      "resumo": "Este ramo do Apache httpd não recebe mais versões nem correções de segurança; o projeto orienta migrar para a versão atual.",
+      "ramos": [
+        { "ramo": "2.2", "fim": "2017-12", "texto": "fim de vida desde dezembro de 2017" },
+        { "ramo": "2.0", "fim": "2013", "texto": "sem novas versões desde 2013" },
+        { "ramo": "1.3", "fim": "2010", "texto": "sem novas versões desde 2010" }
+      ],
+      "referencias": [
+        "https://httpd.apache.org/security/vulnerabilities_22.html",
+        "https://httpd.apache.org/security/vulnerabilities_20.html",
+        "https://httpd.apache.org/security/vulnerabilities_13.html"
+      ]
+    },
+    {
+      "id": "iis-fim-de-vida",
+      "achado": "net.versao.fim_de_vida.iis",
+      "produto": "iis",
+      "severidade": "high",
+      "confianca": "firm",
+      "titulo": "IIS {versao} sem suporte: {situacao}",
+      "resumo": "O IIS segue o ciclo de vida do Windows em que vem instalado, e esta versão só existe em sistemas que já saíram de suporte.",
+      "ramos": [
+        { "ramo": "6.0", "fim": "2015-07-14", "texto": "fim do suporte em 14/07/2015 (Windows Server 2003)" },
+        { "ramo": "7.0", "fim": "2020-01-14", "texto": "fim do suporte em 14/01/2020 (Windows Server 2008)" },
+        { "ramo": "7.5", "fim": "2020-01-14", "texto": "fim do suporte em 14/01/2020 (Windows Server 2008 R2 e Windows 7)" },
+        { "ramo": "8.0", "fim": "2023-10-10", "texto": "fim do suporte em 10/10/2023 (Windows Server 2012)" },
+        { "ramo": "8.5", "fim": "2023-10-10", "texto": "fim do suporte em 10/10/2023 (Windows Server 2012 R2 e Windows 8.1)" }
+      ],
+      "referencias": [
+        "https://learn.microsoft.com/en-us/lifecycle/products/internet-information-services-iis",
+        "https://learn.microsoft.com/en-us/lifecycle/products/windows-server-2003-",
+        "https://learn.microsoft.com/en-us/lifecycle/products/windows-server-2008",
+        "https://learn.microsoft.com/en-us/lifecycle/products/windows-server-2008-r2",
+        "https://learn.microsoft.com/en-us/lifecycle/products/windows-server-2012-r2"
+      ]
+    },
+    {
+      "id": "nginx-ramo-antigo",
+      "achado": "net.versao.ramo_antigo.nginx",
+      "produto": "nginx",
+      "faixas": [{ "ultima_afetada": "1.14.2" }],
+      "cves": [],
+      "severidade": "medium",
+      "confianca": "tentative",
+      "titulo": "nginx {versao} em ramo muito antigo (1.14 ou anterior)",
+      "resumo": "O ramo 1.14 teve sua última versão (1.14.2) em 04/12/2018 e os anteriores são ainda mais antigos; correções publicadas depois não chegaram a eles. Pacotes de distribuição podem ter correções próprias sem mudar o número, por isso é um indício a conferir.",
+      "referencias": [
+        "https://nginx.org/en/CHANGES-1.14",
+        "https://nginx.org/en/download.html",
+        "https://nginx.org/en/security_advisories.html"
+      ]
+    },
+    {
+      "id": "openssh-ramo-antigo",
+      "achado": "net.versao.ramo_antigo.openssh",
+      "produto": "openssh",
+      "faixas": [{ "ultima_afetada": "7.3p1" }],
+      "cves": [],
+      "severidade": "medium",
+      "confianca": "firm",
+      "titulo": "OpenSSH {versao} muito antigo (anterior à 7.4, de dezembro de 2016)",
+      "resumo": "A versão 7.4, de 19/12/2016, removeu do servidor o protocolo SSH-1 e trouxe várias correções de segurança; as anteriores ficaram de fora dessas e das correções seguintes.",
+      "referencias": [
+        "https://www.openssh.org/txt/release-7.4",
+        "https://www.openssh.org/security.html"
+      ]
+    }
+  ]
+}
