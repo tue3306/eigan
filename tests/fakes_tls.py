@@ -312,6 +312,9 @@ class FakeTlsServer(_ThreadedServer):
         self.hellos.append(hello)
         reply = self.policy(hello)
         if reply == SILENT:
+            # Bem acima do prazo do cliente: com prazos iguais, o servidor às vezes fechava
+            # primeiro e o silêncio virava "conexão recusada".
+            conn.settimeout(30)
             conn.recv(1)  # espera o cliente desistir
         elif reply:
             conn.sendall(reply)
