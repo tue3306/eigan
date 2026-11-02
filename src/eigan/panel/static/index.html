@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="eigan-token" content="__EIGAN_TOKEN__">
+  <meta name="eigan-version" content="__EIGAN_VERSION__">
+  <meta name="color-scheme" content="light">
+  <title>EIGAN</title>
+  <link rel="icon" href="/eigan.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/app.css">
+  <script type="module" src="/js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Pular para o conteúdo</a>
+  <div class="app">
+    <aside class="sidebar" aria-label="Navegação principal">
+      <a class="brand" href="#/nova" aria-label="EIGAN, início">
+        <img src="/eigan.svg" alt="" width="30" height="30">
+        <span class="brand-name">EIGAN</span>
+      </a>
+      <nav class="nav" id="nav"></nav>
+      <div class="sidebar-foot">
+        <a class="running" id="running" href="#/historico" hidden></a>
+        <p class="version">Versão <span id="version">__EIGAN_VERSION__</span> · em desenvolvimento</p>
+      </div>
+    </aside>
+    <main id="main" class="main" tabindex="-1"></main>
+  </div>
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+  <noscript><p class="noscript">O painel do EIGAN precisa de JavaScript ativado no navegador.</p></noscript>
+</body>
+</html>

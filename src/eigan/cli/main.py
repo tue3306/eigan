@@ -1,761 +1,512 @@
-"""Interface de linha de comando (headless/CI) + wizard interativo.
+"""Linha de comando do EIGAN.
 
-`eigan` sem subcomando abre o **wizard** (§F). Subcomandos: ``scan`` (zero-
-config: external+standard por padrão), ``report`` (HTML/PDF/JSON/CSV/SARIF ×
-técnico/executivo), ``serve`` (API+dashboard), ``doctor`` (diagnóstico) e
-``feeds`` (atualização de EPSS/KEV).
-
-Implementada com ``click``. Erros são **acionáveis** (dizem o que falta), nunca
-stack trace cru.
+Sem argumentos (ou com dois cliques no executável) abre o painel no navegador.
 """
 
 from __future__ import annotations
 
+import argparse
+import difflib
+import json
 import sys
+import threading
+from collections.abc import Sequence
 from pathlib import Path
+from typing import Any
 
-import click
+from .. import APP_NAME, APP_TAGLINE, __version__
+from ..core import fmt, kb
+from ..core.models import ScanResult, Severity, TargetKind
+from ..core.registry import all_checks, load_builtin_checks
+from ..core.settings import PROFILE_LABEL, PROFILES, load_settings
+from ..core.target import TargetError, parse_target
+from .console import Console, prepare_streams
 
-from ..engine.cognitive import GoalKind
-from ..engine.feeds import FeedCache
-from ..findings.schema import Severity
-from ..findings.store import FindingStore
-from ..perspective import Perspective
-from ..security.scope import ScopeViolation
-from . import doctor as doctor_mod
-from .reporting import TOOL_VERSION, write_report
-from .session import SessionAborted, execute_scan, feeds_meta, plan_scan
-
-
-@click.group(invoke_without_command=True)
-@click.version_option(TOOL_VERSION, prog_name="eigan")
-@click.pass_context
-def cli(ctx: click.Context) -> None:
-    """EIGAN — plataforma modular de operações de segurança (uso autorizado).
-
-    Sem argumentos, abre o **menu interativo** (Novo Scan, Dashboard, Histórico,
-    Configuração, Doctor, Atualizar Ferramentas). Veja `eigan doctor` para
-    checar o ambiente e `eigan scan ALVO` para um scan direto (headless/CI).
-    """
-    # Carrega o .env (chaves de IA gravadas pelo onboarding) no início de TODO
-    # comando — sem isso a chave ficava só no arquivo e o scan era recusado por
-    # "falta de provedor". O ambiente real vence (override=False).
-    from ..envfile import load_dotenv
-    from ..logging_setup import configure_logging
-
-    load_dotenv()
-    configure_logging()  # logging estruturado (texto ou JSON via EIGAN_LOG_FORMAT)
-    if ctx.invoked_subcommand is None:
-        from .menu import run_frontend
-
-        sys.exit(run_frontend())
+EXIT_OK, EXIT_FAIL_ON, EXIT_ERROR, EXIT_CANCELLED = 0, 1, 2, 130
+FAIL_ON = {
+    "critica": Severity.CRITICAL,
+    "alta": Severity.HIGH,
+    "media": Severity.MEDIUM,
+    "baixa": Severity.LOW,
+}
+DEFAULT_FORMATS = ("html", "pdf", "json")
 
 
-@cli.command()
-@click.argument("targets", nargs=-1)
-@click.option("--target-list", type=click.Path(exists=True), help="Arquivo com um alvo por linha.")
-@click.option(
-    "--perspective",
-    type=click.Choice([p.value for p in Perspective]),
-    default=None,
-    help="unified (padrão) avalia público+privado; external/internal aplicam o "
-    "guardrail estrito para quem quer.",
-)
-@click.option("--profile", default="standard", show_default=True)
-@click.option(
-    "--scope",
-    "scope_path",
-    type=click.Path(exists=True),
-    default=None,
-    help="scope.yaml (trava dura, opcional). Sem ele, usa consent inline.",
-)
-@click.option("--db", default="eigan.db", show_default=True)
-@click.option("--yes", is_flag=True, help="Consent + termo não-interativos (CI autorizado).")
-@click.option("--online-enrich", is_flag=True, help="Buscar EPSS (FIRST.org) para os CVEs achados.")
-@click.option(
-    "--override-perspective",
-    is_flag=True,
-    help="Libera a regra público×privado da perspectiva (auditado).",
-)
-@click.option(
-    "--fail-on",
-    type=click.Choice([s.value for s in Severity]),
-    default=None,
-    help="Sai !=0 se houver finding >= esta severidade (gate de CI).",
-)
-@click.option(
-    "--max-tokens",
-    "max_tokens",
-    type=click.IntRange(min=1),
-    default=None,
-    help="Teto de tokens de IA do scan (§2.1): ao atingir, o scan encerra em paz.",
-)
-@click.option(
-    "--max-cost",
-    "max_cost",
-    type=click.FloatRange(min=0, min_open=True),
-    default=None,
-    help="Teto de custo de IA em USD (só com preço verificado; senão use --max-tokens).",
-)
-def scan(
-    targets,
-    target_list,
-    perspective,
-    profile,
-    scope_path,
-    db,
-    yes,
-    online_enrich,
-    override_perspective,
-    fail_on,
-    max_tokens,
-    max_cost,
-):
-    """Executa um scan contra ALVOS autorizados (ex.: `eigan scan example.com`)."""
-    tlist = list(targets)
-    if target_list:
-        tlist += [ln.strip() for ln in Path(target_list).read_text().splitlines() if ln.strip()]
-    if not tlist:
-        raise click.UsageError("Informe ao menos um alvo (posicional) ou --target-list.")
+class _Formatter(argparse.RawDescriptionHelpFormatter):
+    def add_usage(self, usage: Any, actions: Any, groups: Any, prefix: str | None = None) -> None:
+        super().add_usage(usage, actions, groups, prefix or "uso: ")
 
-    if override_perspective:
-        click.secho("[AUDIT] override de perspectiva ATIVO", fg="yellow", err=True)
 
+class _Parser(argparse.ArgumentParser):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        kwargs.setdefault("formatter_class", _Formatter)
+        kwargs.setdefault("add_help", False)
+        super().__init__(*args, **kwargs)
+        self._positionals.title = "argumentos"
+        self._optionals.title = "opções"
+        self.add_argument("-h", "--ajuda", "--help", action="help", help="mostra esta ajuda e sai")
+
+    def error(self, message: str) -> Any:
+        self.print_usage(sys.stderr)
+        self.exit(EXIT_ERROR, f"{self.prog}: erro: {message}\n")
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = _Parser(
+        prog="eigan",
+        description=(
+            f"{APP_NAME} {__version__} — auditor de segurança blue team.\n"
+            "Encontra vulnerabilidades e explica como corrigir. Sem IA, sem chaves de API, offline.\n"
+            "Use somente em sistemas que você tem autorização para avaliar.\n\n"
+            "Sem comando, abre o painel no navegador."
+        ),
+    )
+    parser.add_argument(
+        "--versao",
+        "--version",
+        action="version",
+        version=f"EIGAN {__version__}",
+        help="mostra a versão",
+    )
+    sub = parser.add_subparsers(dest="comando", metavar="comando", parser_class=_Parser)
+
+    p = sub.add_parser("painel", aliases=["serve", "panel"], help="abre o painel no navegador")
+    p.add_argument("--porta", type=int, default=8765, help="porta local (padrão 8765)")
+    p.add_argument("--sem-navegador", action="store_true", help="não abre o navegador")
+
+    p = sub.add_parser(
+        "auditar",
+        aliases=["scan", "audit"],
+        help="audita um alvo e gera os relatórios",
+        description=(
+            "Alvos aceitos: URL (https://site.com.br), host ou IP (servidor.local, 10.0.0.5), "
+            "rede CIDR (10.0.0.0/24), 'local' (esta máquina), uma pasta de projeto ou um "
+            "arquivo/pasta de logs."
+        ),
+    )
+    p.add_argument("alvo", help="o que auditar")
+    p.add_argument("--tipo", choices=[k.value for k in TargetKind], help="força o tipo do alvo")
+    p.add_argument("--perfil", choices=PROFILES, help="rapido, padrao ou completo")
+    p.add_argument("--portas", help="auto, top100, top1000, todas ou lista (22,80,8000-8100)")
+    p.add_argument(
+        "--com-portas", action="store_true", help="em alvos URL, também varre as portas do host"
+    )
+    p.add_argument(
+        "--formatos", help="relatórios a gerar: html,pdf,json,sarif,csv (padrão html,pdf,json)"
+    )
+    p.add_argument("--saida", type=Path, help="pasta dos relatórios")
+    p.add_argument("--sem-relatorio", action="store_true", help="não grava relatórios")
+    p.add_argument(
+        "--falhar-em",
+        "--fail-on",
+        choices=list(FAIL_ON),
+        help="sai com código 1 se houver achado aberto com esta severidade ou maior (para CI)",
+    )
+    p.add_argument("--json", action="store_true", help="imprime o resultado completo em JSON")
+    p.add_argument(
+        "-s", "--sim", "--yes", action="store_true", help="confirma que você tem autorização"
+    )
+    p.add_argument("-q", "--silencioso", action="store_true", help="não mostra o andamento")
+
+    p = sub.add_parser("checagens", aliases=["checks"], help="lista as verificações disponíveis")
+    p.add_argument(
+        "--categoria", help="filtra pela categoria (web, tls, dns, rede, host, codigo, logs)"
+    )
+
+    p = sub.add_parser("explicar", aliases=["explain"], help="explica um achado e como corrigir")
+    p.add_argument("id", help="identificador do achado (ex.: web.hsts.ausente)")
+
+    p = sub.add_parser("historico", aliases=["history"], help="lista as auditorias salvas")
+    p.add_argument("--limite", type=int, default=30)
+
+    p = sub.add_parser(
+        "relatorio", aliases=["report"], help="gera relatórios de uma auditoria salva"
+    )
+    p.add_argument("id", help="id da auditoria (veja 'eigan historico')")
+    p.add_argument("--formatos", help="html,pdf,json,sarif,csv (padrão: todos)")
+    p.add_argument("--saida", type=Path, help="pasta dos relatórios")
+
+    p = sub.add_parser("comparar", aliases=["diff"], help="compara duas auditorias do mesmo alvo")
+    p.add_argument("anterior")
+    p.add_argument("atual")
+
+    sub.add_parser("versao", aliases=["version"], help="mostra a versão")
+    return parser
+
+
+# -- comandos -----------------------------------------------------------------------------
+
+
+def cmd_panel(args: argparse.Namespace) -> int:
+    from ..panel.server import serve
+
+    return serve(port=args.porta, open_browser=not args.sem_navegador)
+
+
+def _parse_formats(text: str | None, default: Sequence[str]) -> list[str]:
+    from ..reports import FORMATS
+
+    if not text:
+        return list(default)
+    formats = [f.strip().lower() for f in text.split(",") if f.strip()]
+    unknown = [f for f in formats if f not in FORMATS]
+    if unknown:
+        raise ValueError(f"Formato desconhecido: {', '.join(unknown)}. Use {', '.join(FORMATS)}.")
+    return formats
+
+
+class _Progress:
+    """Mostra decisões e achados à medida que o motor trabalha."""
+
+    def __init__(self, console: Console) -> None:
+        self.console = console
+        self.lock = threading.Lock()
+
+    def __call__(self, event: dict[str, Any]) -> None:
+        kind = event.get("type")
+        with self.lock:
+            if kind == "decision":
+                self.console.wrap(
+                    str(event.get("text", "")), indent="    ", first=self.console.dim("  · ")
+                )
+            elif kind == "finding":
+                f = event.get("finding", {})
+                severity = str(f.get("severity", "info"))
+                label = Severity(severity).label
+                self.console.line(
+                    f"  {self.console.severity('●', severity)} {self.console.severity(label, severity)}: "
+                    f"{f.get('title', '')} — {f.get('asset', '')}"
+                )
+
+
+def cmd_audit(args: argparse.Namespace) -> int:
+    from ..service import run_audit
+
+    console = Console(sys.stderr if args.json else sys.stdout)
     try:
-        outcome = execute_scan(
-            targets=tlist,
-            perspective=Perspective(perspective) if perspective else None,
-            profile=profile,
-            scope_path=scope_path,
-            db=db,
-            assume_yes=yes,
-            override_perspective=override_perspective,
-            online_enrich=online_enrich,
-            max_ai_tokens=max_tokens,
-            max_ai_cost_usd=max_cost,
-            progress=lambda m: click.echo(f"  {m}"),
+        target = parse_target(args.alvo, args.tipo)
+        formats = [] if args.sem_relatorio else _parse_formats(args.formatos, DEFAULT_FORMATS)
+    except (TargetError, ValueError) as exc:
+        console.line(f"Erro: {exc}")
+        return EXIT_ERROR
+
+    if target.kind in (TargetKind.URL, TargetKind.HOST) and not args.sim:
+        if not sys.stdin.isatty():
+            console.line(
+                "Confirme a autorização com --sim (necessário fora de um terminal interativo)."
+            )
+            return EXIT_ERROR
+        answer = input(f"Você tem autorização para avaliar {target.display}? [s/N] ")
+        if answer.strip().lower() not in ("s", "sim", "y", "yes"):
+            console.line("Auditoria não iniciada.")
+            return EXIT_ERROR
+
+    settings = load_settings()
+    if args.perfil:
+        settings = settings.with_profile(args.perfil)
+    if args.portas:
+        settings.ports = args.portas
+    if args.com_portas:
+        settings.include_ports_for_url = True
+
+    quiet = args.silencioso or args.json
+    if not quiet:
+        console.line(
+            f"{console.bold('EIGAN')} {__version__} · auditando {console.bold(target.display)} "
+            f"({target.kind.label.lower()}, perfil {PROFILE_LABEL[settings.profile].lower()})"
         )
-    except SessionAborted as exc:
-        click.secho(f"Cancelado: {exc}", fg="yellow", err=True)
-        sys.exit(1)
-    except ScopeViolation as exc:
-        click.secho(f"BLOQUEADO: {exc}", fg="red", err=True)
-        sys.exit(2)
+        console.line(console.dim("Ctrl+C cancela e mantém o resultado parcial."))
 
-    report = outcome.report
-    click.secho(
-        f"\nScan #{report.scan_id} [{report.perspective.value}]: {len(report.findings)} findings",
-        fg="green",
-    )
-    for f in report.findings:
-        risk = f"{f.risk.score:.0f}" if f.risk else "—"
-        click.echo(
-            f"  [{f.severity.value.upper():8}] risco {risk:>3}  {f.title}  ({f.affected_asset})"
-        )
-    if report.skipped_tools:
-        click.secho(
-            f"Ferramentas indisponíveis: {', '.join(report.skipped_tools)} (rode `eigan doctor`).",
-            fg="yellow",
-        )
+    cancel = threading.Event()
+    outcome: dict[str, Any] = {}
 
-    if fail_on:
-        threshold = Severity(fail_on).rank
-        worst = max((f.severity.rank for f in report.findings), default=-1)
-        if worst >= threshold:
-            click.secho(f"Gate CI: finding >= {fail_on} encontrado.", fg="red", err=True)
-            sys.exit(1)
-
-
-@cli.command()
-@click.argument("scan_ids", nargs=-1, required=True, type=int)
-@click.option("--db", default="eigan.db", show_default=True)
-@click.option("--ai", is_flag=True, help="Narrativa da IA priorizando os pontos cegos.")
-def purple(scan_ids, db, ai):
-    """Correlação Purple: técnicas ATT&CK atacadas (Red) × detectadas (Blue).
-
-    Ex.: `eigan purple 1 2` (um scan Red e um Blue). Mostra a % de cobertura e os
-    PONTOS CEGOS (técnica atacada SEM detecção) — onde a defesa está cega.
-    """
-    from ..analysis.purple import (
-        DEFAULT_DETECTION_TOOLS,
-        correlate_findings,
-        purple_context,
-    )
-    from ..capability import Category
-    from ..engine.registry import PluginRegistry
-
-    store = FindingStore(db)
-    try:
-        findings = []
-        for sid in scan_ids:
-            if store.get_scan(sid) is None:
-                click.secho(f"Scan #{sid} não encontrado.", fg="red", err=True)
-                sys.exit(2)
-            findings.extend(store.get_findings(sid))
-    finally:
-        store.close()
-
-    tools = set(DEFAULT_DETECTION_TOOLS)
-    try:
-        tools |= {
-            s.name for s in PluginRegistry.discover().all() if s.metadata.category == Category.BLUE
-        }
-    except Exception:  # noqa: BLE001 — registry indisponível não quebra a correlação
-        pass
-    report = correlate_findings(findings, detection_tools=frozenset(tools))
-
-    click.secho(
-        f"\nPurple — cobertura {report.coverage_pct:.0f}% "
-        f"({len(report.covered)} coberta(s) / {len(report.gaps)} ponto(s) cego(s))",
-        fg="green" if not report.gaps else "yellow",
-        bold=True,
-    )
-    click.echo(
-        f"  Red: {report.red_findings} finding(s), {report.red_techniques} técnica(s)  ·  "
-        f"Blue: {report.blue_findings} detecção(ões), {report.blue_techniques} técnica(s)"
-    )
-    if report.gaps:
-        click.secho("\n  PONTOS CEGOS (atacado sem detecção):", fg="red")
-        for t in report.gaps:
-            click.echo(f"    ✗ {t}")
-    if report.covered:
-        click.secho("\n  Cobertas (atacado E detectado):", fg="green")
-        for t in report.covered:
-            click.echo(f"    ✔ {t}")
-    if ai:
-        from ..ai.conversation import purple_analysis
-        from ..ai.provider import AIProviderRequired, require_provider
-
+    def work() -> None:
         try:
-            require_provider()
-        except AIProviderRequired as exc:
-            click.secho(str(exc), fg="red", err=True)
-            sys.exit(3)
-        click.secho("\nNarrativa da IA (priorização dos pontos cegos):", fg="cyan")
-        click.echo(purple_analysis(purple_context(report)))
+            outcome["result"] = run_audit(
+                target.raw,
+                kind=target.kind.value,
+                settings=settings,
+                emit=None if quiet else _Progress(console),
+                cancel=cancel,
+            )
+        except Exception as exc:  # noqa: BLE001 — erro vira mensagem e código de saída
+            outcome["error"] = exc
 
-
-@cli.command()
-@click.argument("paths", nargs=-1, required=True, type=click.Path(exists=True))
-@click.option("--db", default="eigan.db", show_default=True)
-@click.option("--online-enrich", is_flag=True, help="Buscar EPSS (FIRST.org) p/ CVEs, se houver.")
-@click.option(
-    "--fail-on",
-    type=click.Choice([s.value for s in Severity]),
-    default=None,
-    help="Sai !=0 se houver detecção >= esta severidade (gate de CI).",
-)
-def blue(paths, db, online_enrich, fail_on):
-    """Análise defensiva (Blue) de LOGS — detecta ataques e mapeia MITRE ATT&CK.
-
-    Ex.: `eigan blue /var/log/auth.log /var/log/nginx/`. ALVO = arquivo ou
-    diretório de logs (SSH/PAM, acesso web CLF/Combined, sudo). As detecções
-    entram no mesmo dashboard/relatórios do Red e alimentam a correlação Purple.
-    AI-native (§3.4): exige um provedor — a IA analisa e prioriza as detecções.
-    """
-    from ..ai.provider import AIProviderRequired, require_provider
-    from ..engine.blue import run_log_analysis
-    from ..engine.risk import RiskScorer
-
+    worker = threading.Thread(target=work, name="eigan-auditoria", daemon=True)
+    worker.start()
     try:
-        provider = require_provider()
-    except AIProviderRequired as exc:
-        click.secho(str(exc), fg="red", err=True)
-        sys.exit(3)
+        while worker.is_alive():
+            worker.join(0.3)
+    except KeyboardInterrupt:
+        console.line("\nCancelando… aguarde as verificações em curso.")
+        cancel.set()
+        worker.join()
 
-    feeds = FeedCache.load()
-    risk = RiskScorer(feeds, online=online_enrich)
-    store = FindingStore(db)
-    click.echo(f"  Analisando {len(paths)} fonte(s) de log…")
-    try:
-        report = run_log_analysis(list(paths), store=store, risk=risk, provider=provider)
-    finally:
-        store.close()
+    if "error" in outcome:
+        console.line(f"Erro na auditoria: {outcome['error']}")
+        return EXIT_ERROR
+    result: ScanResult = outcome["result"]
 
-    click.secho(
-        f"\nBlue #{report.scan_id}: {len(report.findings)} detecção(ões) "
-        f"em {len(report.sources)} fonte(s) de log",
-        fg="green",
+    written: dict[str, Path] = {}
+    if formats:
+        from ..reports import write_reports
+
+        written = write_reports(result, formats, args.saida)
+
+    if args.json:
+        print(json.dumps(result.to_dict(), ensure_ascii=False, indent=2))
+    else:
+        print_summary(console, result, written)
+
+    if result.status == "cancelada":
+        return EXIT_CANCELLED
+    if args.falhar_em:
+        floor = FAIL_ON[args.falhar_em]
+        from ..intel.scoring import counts_toward_score
+
+        if any(counts_toward_score(f) and f.severity.rank >= floor.rank for f in result.findings):
+            return EXIT_FAIL_ON
+    return EXIT_OK
+
+
+def print_summary(
+    console: Console, result: ScanResult, written: dict[str, Path] | None = None
+) -> None:
+    analysis = result.analysis
+    posture = analysis.get("posture", {})
+    narrative = analysis.get("narrative", {})
+    counts = analysis.get("counts", {})
+    console.line()
+    console.rule(f"Resultado · {result.target}")
+    grade = str(posture.get("grade", "—"))
+    if analysis.get("evaluated"):
+        line = f"Nota {console.grade(grade, grade)} · {posture.get('score')}/100 ({posture.get('label', '')})"
+        console.line(line)
+        if posture.get("cap_reason"):
+            console.wrap(str(posture["cap_reason"]), indent="  ")
+    console.wrap(str(narrative.get("headline", "")))
+    parts = [
+        console.severity(f"{s.label} {counts.get(s.value, 0)}", s.value)
+        for s in (Severity.CRITICAL, Severity.HIGH, Severity.MEDIUM, Severity.LOW)
+        if counts.get(s.value)
+    ]
+    if parts:
+        console.line("Achados abertos: " + " · ".join(parts))
+
+    plan = analysis.get("plan", [])
+    if plan:
+        console.line()
+        console.rule("Plano de correção")
+        for index, action in enumerate(plan[:5], 1):
+            extra = f"esforço {str(action['effort_label']).split(' ')[0].lower()}"
+            if action.get("score_gain"):
+                extra += f", +{action['score_gain']} pontos"
+            console.line(f"{index}. [{action['band']}] {console.bold(action['title'])} — {extra}")
+            for problem in action["problems"][:3]:
+                console.wrap(problem["title"], indent="     ", first="   • ")
+                for step in problem["steps"][:3]:
+                    console.wrap(step, indent="       ", first=console.dim("     - "))
+        if len(plan) > 5:
+            console.line(console.dim(f"   … mais {len(plan) - 5} ações no relatório."))
+        what_if = analysis.get("what_if")
+        if what_if:
+            console.line(
+                f"Fazendo as {what_if['actions']} primeiras ações, a nota estimada vai para "
+                f"{what_if['score']} ({what_if['grade']})."
+            )
+    if written:
+        console.line()
+        console.rule("Relatórios")
+        for path in written.values():
+            console.line(f"  {path}")
+    console.line(
+        console.dim(
+            f"Auditoria {result.id} · {fmt.duration(result.duration)} · eigan explicar <id> detalha cada achado"
+        )
     )
-    for f in report.findings:
-        click.echo(
-            f"  [{f.severity.value.upper():8}] {f.title}  "
-            f"ATT&CK={f.attack_technique or '—'}  ({f.affected_asset})"
+
+
+def cmd_checks(args: argparse.Namespace) -> int:
+    console = Console()
+    load_builtin_checks()
+    checks = all_checks()
+    if args.categoria:
+        checks = [c for c in checks if c.category.value == args.categoria.lower()]
+    current = ""
+    for check in sorted(checks, key=lambda c: (c.category.value, c.order, c.id)):
+        if check.category.value != current:
+            current = check.category.value
+            console.line()
+            console.rule(check.category.label)
+        profiles = ", ".join(PROFILE_LABEL[p].lower() for p in check.profiles)
+        console.line(
+            f"  {console.bold(check.id)} — {check.name} {console.dim('(' + profiles + ')')}"
         )
-    if report.analysis:
-        click.echo(
-            "\nAnálise + plano de remediação da IA gerados. "
-            "Veja no dashboard (`eigan serve`) ou gere o relatório (`eigan report`)."
+        console.wrap(check.description, indent="      ")
+    stats = kb.stats()
+    console.line()
+    console.line(
+        f"{len(checks)} verificações · {stats.total} tipos de achado na base de conhecimento."
+    )
+    return EXIT_OK
+
+
+def cmd_explain(args: argparse.Namespace) -> int:
+    console = Console()
+    load_builtin_checks()
+    entry = kb.get(args.id)
+    if entry is None:
+        close = difflib.get_close_matches(
+            args.id, [e.id for e in kb.all_entries()], n=5, cutoff=0.5
         )
-    if fail_on:
-        threshold = Severity(fail_on).rank
-        worst = max((f.severity.rank for f in report.findings), default=-1)
-        if worst >= threshold:
-            click.secho(f"Gate CI: detecção >= {fail_on} encontrada.", fg="red", err=True)
-            sys.exit(1)
+        console.line(f"'{args.id}' não está na base de conhecimento.")
+        if close:
+            console.line("Você quis dizer: " + ", ".join(close))
+        return EXIT_ERROR
+    console.rule(f"{entry.title}  ({entry.id})")
+    console.line(
+        f"Severidade padrão: {console.severity(entry.severity.label, entry.severity.value)} · categoria {entry.category.label}"
+    )
+    console.line()
+    console.wrap(entry.summary)
+    console.line()
+    console.rule("O que é")
+    console.wrap(entry.explanation)
+    console.line()
+    console.rule("Risco")
+    console.wrap(entry.risk)
+    console.line()
+    console.rule("Como corrigir")
+    for index, step in enumerate(entry.steps, 1):
+        console.wrap(step, indent="   ", first=f"{index}. ")
+    for fix in entry.examples:
+        console.line()
+        console.line(console.bold(f"Exemplo — {fix.label}"))
+        for code_line in fix.code.splitlines():
+            console.line("    " + code_line)
+    console.line()
+    console.rule("Como verificar")
+    console.wrap(entry.verify)
+    tags = [t for t in (entry.cwe, entry.owasp) if t] + [f"CIS {c}" for c in entry.cis]
+    if entry.lgpd:
+        tags.append("LGPD")
+    if tags:
+        console.line()
+        console.line(console.dim("Referências de conformidade: " + ", ".join(tags)))
+    for ref in entry.references:
+        console.line(console.dim(f"  {ref}"))
+    return EXIT_OK
 
 
-@cli.command()
-@click.argument("targets", nargs=-1)
-@click.option(
-    "--goal",
-    default=GoalKind.ATTACK_SURFACE.value,
-    show_default=True,
-    help="Objetivo (aceita hífen ou underscore): " + " | ".join(g.value for g in GoalKind),
-)
-@click.option(
-    "--perspective",
-    type=click.Choice([p.value for p in Perspective]),
-    default=None,
-    help="external|internal. Padrão: o da perspectiva do objetivo.",
-)
-@click.option("--profile", default="standard", show_default=True)
-@click.option("--scope", "scope_path", type=click.Path(exists=True), default=None)
-@click.option("--db", default="eigan.db", show_default=True)
-@click.option(
-    "--dry-run/--execute",
-    default=True,
-    show_default=True,
-    help="dry-run: só mostra o plano e a seleção justificada (não executa, sem consent).",
-)
-@click.option(
-    "--ai/--no-ai", default=False, help="IA prioriza capacidades (fallback determinístico)."
-)
-@click.option("--yes", is_flag=True, help="Consent + termo não-interativos (execução autorizada).")
-@click.option("--online-enrich", is_flag=True, help="Buscar EPSS (FIRST.org) na execução.")
-@click.option("--override-perspective", is_flag=True, help="Libera público×privado (auditado).")
-def plan(
-    targets,
-    goal,
-    perspective,
-    profile,
-    scope_path,
-    db,
-    dry_run,
-    ai,
-    yes,
-    online_enrich,
-    override_perspective,
-):
-    """Núcleo cognitivo: dado um OBJETIVO, o Planner escolhe capacidades e o
-    Selection Engine escolhe a ferramenta — tudo justificado (ADR-0007).
+def cmd_history(args: argparse.Namespace) -> int:
+    from ..storage import Store
 
-    Ex.: `eigan plan example.com --goal attack-surface` (dry-run, seguro).
-    Adicione `--execute` para rodar de verdade (passa pelo consent gate).
-    """
-    tlist = list(targets)
-    if not tlist:
-        raise click.UsageError("Informe ao menos um alvo (posicional).")
+    console = Console()
+    scans = Store().scans(limit=args.limite)
+    if not scans:
+        console.line("Nenhuma auditoria salva ainda. Comece com: eigan auditar <alvo>")
+        return EXIT_OK
+    for row in scans:
+        grade = row.get("grade") or "—"
+        score = row.get("score")
+        score_text = f"{score:>3}" if isinstance(score, int) else "  —"
+        console.line(
+            f"{row['id']}  {fmt.date_time(row['started_at'])}  {console.grade(f'{grade:<2}', grade)} {score_text}  "
+            f"{row['target']}  {console.dim(PROFILE_LABEL.get(row['profile'], row['profile']).lower())}"
+        )
+    return EXIT_OK
+
+
+def cmd_report(args: argparse.Namespace) -> int:
+    from ..reports import FORMATS, write_reports
+    from ..storage import Store
+
+    console = Console()
+    result = Store().get(args.id)
+    if result is None:
+        console.line(f"Auditoria '{args.id}' não encontrada. Veja os ids com: eigan historico")
+        return EXIT_ERROR
     try:
-        goal_kind = GoalKind.from_str(goal)
+        formats = _parse_formats(args.formatos, FORMATS)
     except ValueError as exc:
-        raise click.UsageError(str(exc)) from exc
-    try:
-        outcome = plan_scan(
-            goal_kind=goal_kind,
-            targets=tlist,
-            perspective=Perspective(perspective) if perspective else None,
-            profile=profile,
-            scope_path=scope_path,
-            db=db,
-            assume_yes=yes,
-            override_perspective=override_perspective,
-            online_enrich=online_enrich,
-            dry_run=dry_run,
-            use_ai=ai,
-            echo=lambda m: click.echo(m),
-        )
-    except SessionAborted as exc:
-        click.secho(f"Cancelado: {exc}", fg="yellow", err=True)
-        sys.exit(1)
-    except ScopeViolation as exc:
-        click.secho(f"BLOQUEADO: {exc}", fg="red", err=True)
-        sys.exit(2)
-
-    mode = "PLANO (dry-run, nada executado)" if dry_run else "EXECUÇÃO"
-    ai_txt = "IA" if outcome.ai_used else "determinístico"
-    click.secho(
-        f"\n{mode} · objetivo «{outcome.goal.kind.label}» "
-        f"[{outcome.goal.perspective.value}] · planner={outcome.planner_name} ({ai_txt})",
-        fg="cyan",
-        bold=True,
-    )
-    for d in outcome.decisions:
-        color = {
-            "selected": "green",
-            "executed": "green",
-            "suggested": "yellow",
-            "scaffold": "yellow",
-            "skipped": "yellow",
-            "failed": "red",
-            "stop": "blue",
-        }.get(d.action, None)
-        click.secho(f"  {d.render()}", fg=color)
-
-    if outcome.report is not None:
-        r = outcome.report
-        click.secho(
-            f"\nScan #{r.scan_id}: {len(r.findings)} findings · parada: {r.stop_reason.value}",
-            fg="green",
-        )
-    if outcome.suggestions:
-        tools = ", ".join(s.tool for s in outcome.suggestions)
-        click.secho(f"Sugeridas (não executadas): {tools}", fg="yellow")
-    if outcome.estimate is not None:
-        est = outcome.estimate
-        click.secho("\nEstimativa de orçamento de IA (§2.6):", fg="cyan")
-        click.echo(f"  · capacidades no plano: {est.capabilities}")
-        click.echo(
-            f"  · chamadas de planejamento: {est.planning_calls_min}–{est.planning_calls_max} "
-            "(plano inicial + replan por onda)"
-        )
-        click.echo(
-            f"  · teto de tokens de saída (planejamento): ~{est.total_output_tokens_max} "
-            f"({est.max_output_tokens_per_call}/chamada)"
-        )
-        click.echo(
-            "  · enriquecimento: +1 chamada por CLASSE de finding encontrada "
-            "(desconhecido antes do scan)"
-        )
-        if est.cost_max is not None:
-            click.echo(
-                f"  · custo (tokens de saída no teto): ~{est.cost_max.amount} "
-                f"{est.cost_max.currency} — entrada/enriquecimento adicionais"
-            )
-        else:
-            click.echo("  · custo: UNVERIFIED (sem preço confirmado; estimativa em tokens — P1)")
-        click.echo("  · limite o gasto com --max-tokens / --max-cost (§2.1).")
-    if dry_run:
-        click.echo("\nPara executar de verdade: repita com --execute (exige autorização).")
+        console.line(f"Erro: {exc}")
+        return EXIT_ERROR
+    for path in write_reports(result, formats, args.saida).values():
+        console.line(str(path))
+    return EXIT_OK
 
 
-@cli.command()
-@click.option("--scan", "scan_id", required=True, type=int)
-@click.option("--db", default="eigan.db", show_default=True)
-@click.option(
-    "--format",
-    "fmt",
-    type=click.Choice(["pdf", "html", "md", "json", "csv", "sarif"]),
-    default="html",
-    show_default=True,
-)
-@click.option(
-    "--style", type=click.Choice(["technical", "executive"]), default="technical", show_default=True
-)
-@click.option("--out", default=None)
-@click.option("--ai/--no-ai", default=False, help="Enriquecer narrativa com IA (se houver chave).")
-@click.option(
-    "--classification",
-    type=click.Choice(["public", "internal", "confidential", "restricted"]),
-    default="confidential",
-    show_default=True,
-    help="Classificação da informação (destaque na capa/cabeçalho/rodapé + aviso).",
-)
-@click.option(
-    "--show-sensitive",
-    is_flag=True,
-    help="NÃO mascarar segredos/credenciais no relatório (padrão: mascarado). Use com cuidado.",
-)
-def report(scan_id, db, fmt, style, out, ai, classification, show_sensitive):
-    """Gera relatório de um scan em HTML/PDF/JSON/CSV/SARIF (técnico ou executivo)."""
-    store = FindingStore(db)
-    fmeta = feeds_meta(FeedCache.load())
-    try:
-        path, ai_used = write_report(
-            store,
-            scan_id,
-            fmt=fmt,
-            style=style,
-            out=out,
-            use_ai=ai,
-            feeds_meta=fmeta,
-            classification=classification,
-            show_sensitive=show_sensitive,
-        )
-    except ValueError as exc:
-        raise click.UsageError(str(exc)) from exc
-    except RuntimeError as exc:  # PDF indisponível → degrada para HTML (§13), sem stack trace
-        if fmt == "pdf":
-            click.secho(f"PDF indisponível: {exc}", fg="yellow", err=True)
-            click.secho("Gerando HTML equivalente…", fg="yellow", err=True)
-            path, ai_used = write_report(
-                store,
-                scan_id,
-                fmt="html",
-                style=style,
-                out=None,
-                use_ai=ai,
-                feeds_meta=fmeta,
-                classification=classification,
-                show_sensitive=show_sensitive,
-            )
-            click.secho(
-                f"Relatório HTML gerado: {path}. Para PDF, habilite o WeasyPrint "
-                "(rode `eigan doctor`).",
-                fg="green",
-            )
-            return
-        click.secho(f"Erro ao gerar {fmt}: {exc}", fg="red", err=True)
-        sys.exit(1)
-    click.secho(f"Relatório gerado: {path}  (IA: {'sim' if ai_used else 'não'})", fg="green")
+def cmd_compare(args: argparse.Namespace) -> int:
+    from ..intel.diff import compare
+    from ..storage import Store, target_key
 
-
-@cli.command()
-@click.option("--scan", "scan_id", required=True, type=int)
-@click.option("--db", default="eigan.db", show_default=True)
-@click.option(
-    "--out",
-    "out_dir",
-    default="remediation",
-    show_default=True,
-    help="Diretório onde gravar os playbooks (sugestões revisáveis).",
-)
-def remediate(scan_id, db, out_dir):
-    """Gera artefatos de correção (Ansible) revisáveis para um scan (Pilar 6).
-
-    SUGESTÕES — nunca aplicadas automaticamente. Findings sem template são
-    listados honestamente como pendentes.
-    """
-    from ..report.remediation import generate_all
-
-    store = FindingStore(db)
-    if store.get_scan(scan_id) is None:
-        raise click.UsageError(f"Scan #{scan_id} não encontrado no banco {db!r}.")
-    findings = store.get_findings(scan_id)
-    artifacts, uncovered = generate_all(findings)
-
-    if not artifacts:
-        click.secho(
-            "Nenhum finding deste scan tem template de remediação ainda "
-            "(nada foi fabricado). Veja o roadmap para os tipos cobertos.",
-            fg="yellow",
-        )
-        return
-
-    out = Path(out_dir)
-    out.mkdir(parents=True, exist_ok=True)
-    click.secho(f"Artefatos de remediação (SUGESTÕES revisáveis) em {out}/:", fg="green", bold=True)
-    for art in artifacts:
-        (out / art.filename).write_text(art.content)
-        click.echo(f"  [{art.format}] {art.filename}  — {art.title}  ({art.applies_to})")
-    click.secho(
-        "\nRevise cada playbook (variáveis/escopo) antes de aplicar. "
-        "O EIGAN NÃO executa remediação automaticamente.",
-        fg="yellow",
-    )
-    if uncovered:
-        click.secho(
-            f"\nSem template ainda ({len(uncovered)}): "
-            + ", ".join(sorted({f.title for f in uncovered}))[:200],
-            fg="yellow",
-        )
-
-
-@cli.command()
-@click.option("--scan", "scan_id", required=True, type=int, help="Scan atual (mais recente).")
-@click.option(
-    "--against",
-    "baseline_id",
-    type=int,
-    default=None,
-    help="Scan-base para comparar. Padrão: o scan anterior do mesmo alvo (automático).",
-)
-@click.option("--db", default="eigan.db", show_default=True)
-@click.option("--ai/--no-ai", default=False, help="IA narra a mudança (fallback determinístico).")
-def diff(scan_id, baseline_id, db, ai):
-    """Memória entre scans: o que mudou desde a última execução do alvo (Pilar 2).
-
-    Diff determinístico (novos/corrigidos/persistentes + novos ativos/serviços).
-    Ex.: `eigan diff --scan 7`  ·  `eigan diff --scan 7 --against 3`.
-    """
-    from ..analysis.diff import diff_findings
-
-    store = FindingStore(db)
-    if store.get_scan(scan_id) is None:
-        raise click.UsageError(f"Scan #{scan_id} não encontrado no banco {db!r}.")
-    if baseline_id is None:
-        baseline_id = store.find_previous_scan(scan_id)
-    previous = store.get_findings(baseline_id) if baseline_id is not None else []
-    current = store.get_findings(scan_id)
-    result = diff_findings(previous, current, previous_scan_id=baseline_id, current_scan_id=scan_id)
-
-    narrative = _narrate_diff(result) if ai else result.summary()
-    click.secho(f"\n{narrative}", fg="cyan", bold=True)
-
-    def _list(label: str, items, color: str) -> None:
+    console = Console()
+    store = Store()
+    old, new = store.get(args.anterior), store.get(args.atual)
+    if old is None or new is None:
+        console.line("Auditoria não encontrada. Veja os ids com: eigan historico")
+        return EXIT_ERROR
+    if target_key(old.kind.value, old.target) != target_key(new.kind.value, new.target):
+        console.line("Só é possível comparar auditorias do mesmo alvo.")
+        return EXIT_ERROR
+    if old.started_at > new.started_at:
+        old, new = new, old
+    data = compare(new, old)
+    console.rule(f"{new.target}: {fmt.date_time(old.started_at)} → {fmt.date_time(new.started_at)}")
+    console.line(f"Nota: {data['score_before']} → {data['score_after']} ({data['delta']:+d})")
+    for key, title in (
+        ("fixed", "Corrigidos"),
+        ("new", "Novos"),
+        ("persisting", "Ainda abertos"),
+        ("unverified", "Não verificados nesta auditoria"),
+    ):
+        items = data[key]
         if not items:
-            return
-        click.secho(f"\n{label}:", fg=color, bold=True)
-        for f in items:
-            risk = f"{f.risk.score:.0f}" if f.risk else "—"
-            click.echo(
-                f"  [{f.severity.value.upper():8}] risco {risk:>3}  {f.title}  ({f.affected_asset})"
+            continue
+        console.line()
+        console.line(console.bold(f"{title} ({len(items)})"))
+        for item in items:
+            console.line(
+                f"  {console.severity('●', item['severity'])} {item['title']} — {item['asset']}"
             )
-
-    _list("Novos", result.new, "red")
-    _list("Corrigidos", result.resolved, "green")
-    if result.new_services:
-        click.secho("\nNovos serviços/portas:", fg="yellow", bold=True)
-        for s in result.new_services:
-            click.echo(f"  {s}")
-    if result.new_assets:
-        click.secho("\nNovos ativos:", fg="yellow", bold=True)
-        for a in result.new_assets:
-            click.echo(f"  {a}")
+    return EXIT_OK
 
 
-def _narrate_diff(result) -> str:
-    """Narrativa por IA do diff, com **fallback determinístico** (§3.4). A IA só
-    recebe contagens + títulos já normalizados (grounding); nunca inventa."""
-    base = result.summary()
-    try:
-        from ..ai.provider import default_provider
-
-        provider = default_provider()
-        if provider is None or not provider.available():
-            return base
-        counts = result.counts()
-        titles = "; ".join(f.title for f in result.new[:5]) or "nenhum"
-        system = (
-            "Você resume mudanças entre dois scans de segurança para um gestor. "
-            "Baseie-se SOMENTE nos dados fornecidos. NUNCA invente CVE, número ou "
-            "severidade. 2-3 frases, direto."
-        )
-        user = (
-            f"Contagens: {counts}. Novos findings (títulos): {titles}.\nBase determinística: {base}"
-        )
-        text = provider.complete(system, user).strip()  # type: ignore[attr-defined]
-        return text or base
-    except Exception:  # noqa: BLE001 — IA nunca quebra o diff
-        return base
+def cmd_version(_args: argparse.Namespace) -> int:
+    print(f"EIGAN {__version__} — {APP_TAGLINE}")
+    print("Blue team, por regras: sem IA, sem chaves de API, sem envio de dados.")
+    return EXIT_OK
 
 
-@cli.command()
-@click.option("--host", default="127.0.0.1", show_default=True)
-@click.option("--port", default=8000, type=int, show_default=True)
-@click.option("--db", default="eigan.db", show_default=True)
-@click.option(
-    "--expose",
-    is_flag=True,
-    default=False,
-    help="Expor na rede (0.0.0.0). Exige e imprime o token do EIGAN. Sem isto: só loopback.",
-)
-@click.option(
-    "--open/--no-open",
-    "open_browser",
-    default=None,
-    help="Abrir o navegador no dashboard (padrão: sim em terminal interativo).",
-)
-def serve(host, port, db, expose, open_browser):
-    """Sobe a API + dashboard, imprime a URL e (opcional) abre o navegador.
-
-    Por segurança (ADR-0014) o bind é loopback (127.0.0.1) por padrão. Use
-    ``--expose`` para ouvir em 0.0.0.0 — aí a API exige o token do EIGAN."""
-    from .menu import serve_app
-
-    if expose and host in ("127.0.0.1", "localhost", "::1"):
-        host = "0.0.0.0"  # nosec B104 — só com --expose explícito; a API então exige token (ADR-0014)
-    if open_browser is None:
-        open_browser = sys.stdout.isatty()
-    serve_app(host=host, port=port, db=db, open_browser=open_browser, echo=click.echo)
+COMMANDS = {
+    "painel": cmd_panel,
+    "serve": cmd_panel,
+    "panel": cmd_panel,
+    "auditar": cmd_audit,
+    "scan": cmd_audit,
+    "audit": cmd_audit,
+    "checagens": cmd_checks,
+    "checks": cmd_checks,
+    "explicar": cmd_explain,
+    "explain": cmd_explain,
+    "historico": cmd_history,
+    "history": cmd_history,
+    "relatorio": cmd_report,
+    "report": cmd_report,
+    "comparar": cmd_compare,
+    "diff": cmd_compare,
+    "versao": cmd_version,
+    "version": cmd_version,
+}
 
 
-@cli.command("menu")
-@click.option("--db", default="eigan.db", show_default=True)
-def menu_cmd(db):
-    """Abre o menu interativo (porta de entrada de produto: TUI ou menu numerado)."""
-    from .menu import run_frontend
+def main(argv: Sequence[str] | None = None) -> int:
+    prepare_streams()
+    from ..core.logs import setup_logging
 
-    sys.exit(run_frontend(db))
-
-
-@cli.command()
-@click.option(
-    "--install",
-    "do_install",
-    is_flag=True,
-    help="Provisiona (com confirmação) as ferramentas com runner real que faltam.",
-)
-@click.option("--yes", is_flag=True, help="Confirma sem interação (automação autorizada).")
-@click.option(
-    "--probe-ai",
-    "probe_ai",
-    is_flag=True,
-    help="Testa de verdade se a IA responde (chamada real ao provedor ativo).",
-)
-def doctor(do_install, yes, probe_ai):
-    """Diagnostica o ambiente (Python, ferramentas, IA, Docker, PDF, feeds).
-
-    Com --install, lista exatamente o que vai rodar e, após sua confirmação
-    (consent gate), instala as ferramentas reais ausentes — nunca de fonte não
-    oficial, nunca com shell. Com --probe-ai, faz uma chamada real ao provedor de
-    IA configurado para certificar que ele responde (Ollama, nuvem, etc.).
-    """
-    report_ = doctor_mod.gather()
-    doctor_mod.render(report_, click.echo, click.secho)
-    if probe_ai:
-        doctor_mod.probe_ai(click.echo, click.secho)
-    if do_install:
-        actions = doctor_mod.plan_install(report_)
-        doctor_mod.run_install(actions, assume_yes=yes, echo=click.echo)
-        return
-    level, _ = report_.verdict()
-    sys.exit(0 if level != "error" else 1)
-
-
-@cli.group()
-def feeds():
-    """Feeds de risco (EPSS/KEV) — fonte oficial, com cache (ADR-0002)."""
-
-
-@feeds.command("update")
-def feeds_update():
-    """Atualiza o catálogo CISA KEV (rede). EPSS é enriquecido sob demanda no scan."""
-    fc = FeedCache.load()
-    click.echo("Baixando CISA KEV…")
-    try:
-        meta = fc.update_kev()
-    except Exception as exc:  # noqa: BLE001 — rede/parse: mensagem acionável, sem stack trace
-        click.secho(
-            f"Falha ao atualizar KEV: {exc}\n"
-            "Verifique a conexão; sem o feed, KEV sai UNVERIFIED (não fabricado).",
-            fg="red",
-            err=True,
-        )
-        sys.exit(1)
-    click.secho(
-        f"KEV atualizado: {meta['count']} CVEs · versão {meta.get('catalogVersion', '?')} "
-        f"· {meta.get('dateReleased', '?')}",
-        fg="green",
-    )
-    click.echo(f"Cache: {fc.cache_dir}")
-
-
-def main() -> None:
-    from ..ai.provider import AIProviderRequired
-
-    try:
-        cli()
-    except AIProviderRequired as exc:
-        # Gate AI-native (§3.4/ADR-0012): mensagem acionável, nunca stack trace.
-        click.secho("\n✗ IA obrigatória — scan recusado.\n", fg="red", bold=True, err=True)
-        click.secho(str(exc), fg="yellow", err=True)
-        sys.exit(3)
-
-
-def deprecated_alias() -> None:
-    """Entry-point de transição do comando antigo ``vulnforge`` → ``eigan``.
-
-    Emite um aviso de depreciação em stderr (não polui stdout/JSON de CI) e
-    delega para a mesma CLI. Será removido numa versão futura.
-    """
-    click.echo(
-        "aviso: 'vulnforge' foi renomeado para 'eigan'. Use o comando 'eigan'. "
-        "Este alias será removido numa versão futura.",
-        err=True,
-    )
-    cli()
-
-
-if __name__ == "__main__":
-    main()
+    setup_logging()
+    parser = build_parser()
+    args = parser.parse_args(list(argv) if argv is not None else None)
+    if not args.comando:
+        args = parser.parse_args(["painel"])
+    return COMMANDS[args.comando](args)
