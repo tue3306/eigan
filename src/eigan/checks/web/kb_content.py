@@ -1,9 +1,4 @@
-"""Base de conhecimento do conteúdo das páginas (checagem ``web.content``).
-
-Conteúdo misto, scripts de terceiros sem SRI, formulários (senha sem HTTPS, envio
-por HTTP, sem token anti-CSRF), segredos no HTML/JavaScript e páginas de erro e
-de depuração expostas.
-"""
+"""Base de conhecimento do conteúdo das páginas (checagem ``web.content``).\n\nConteúdo misto, scripts de terceiros sem SRI, formulários (senha sem HTTPS, envio\npor HTTP, sem token anti-CSRF), segredos no HTML/JavaScript e páginas de erro e\nde depuração expostas.\n"""
 
 from __future__ import annotations
 
@@ -521,6 +516,140 @@ kb.register(
         owasp="A05:2021",
         cis=("3.3",),
         tags=("segredos", "conteudo", "google"),
+    ),
+    KBEntry(
+        id="web.conteudo.token_localstorage",
+        title="Token de sessão guardado em localStorage ou sessionStorage",
+        category=Category.WEB,
+        severity=Severity.LOW,
+        summary="O JavaScript do site grava um token de sessão onde qualquer script da página consegue lê-lo.",
+        explanation=(
+            "O localStorage e o sessionStorage são legíveis por todo JavaScript que roda na página: "
+            "o do próprio site, bibliotecas de terceiros e qualquer script injetado por uma falha "
+            "de XSS. Diferente do cookie com HttpOnly, não há como proibir essa leitura. A "
+            "detecção olha o nome da chave (token, jwt, session, sessao, auth) e a variável "
+            "gravada; por isso a confiança é tentativa: confirme se o valor guardado é mesmo o "
+            "que autentica o usuário. Chaves de tema, idioma, carrinho e consentimento são "
+            "ignoradas."
+        ),
+        risk=(
+            "Uma única falha de XSS, ou um script de terceiros comprometido, copia o token e o "
+            "envia a um servidor do atacante, que passa a agir como o usuário sem precisar da "
+            "senha. O token continua valendo mesmo depois de a falha ser corrigida, até expirar."
+        ),
+        steps=(
+            "Confirme no navegador (F12 > Aplicativo > Armazenamento local) o que a chave "
+            "contém e se ela autentica chamadas ao servidor.",
+            "Emita a sessão pelo servidor em um cookie com HttpOnly, Secure e SameSite, e deixe "
+            "o navegador enviá-lo sozinho (fetch com credentials).",
+            "Se o token precisar mesmo ficar no JavaScript, use validade curta, renovação por "
+            "cookie HttpOnly e uma Content-Security-Policy restritiva para reduzir o alcance de "
+            "um XSS.",
+            "Revogue os tokens que já foram emitidos e guardados dessa forma.",
+        ),
+        examples=(
+            Fix(
+                "express",
+                "Node.js / Express (sessão em cookie HttpOnly)",
+                "res.cookie('sessao', token, {\n"
+                "  httpOnly: true, secure: true, sameSite: 'strict', maxAge: 3600 * 1000,\n});",
+                "javascript",
+            ),
+            Fix(
+                "generico",
+                "Navegador (o cookie vai junto, sem ler o token)",
+                "fetch('/api/perfil', { credentials: 'include' });",
+                "javascript",
+            ),
+            Fix(
+                "generico",
+                "Cabeçalho que o servidor deve enviar",
+                "Set-Cookie: sessao=...; Path=/; Secure; HttpOnly; SameSite=Strict",
+                "text",
+            ),
+        ),
+        verify=(
+            "Repita o login e confira em F12 > Aplicativo que nenhuma chave de token surge em "
+            "Armazenamento local e Armazenamento de sessão; o cookie de sessão deve aparecer "
+            "marcado com HttpOnly e Secure. Repita a auditoria."
+        ),
+        effort="medio",
+        fix_group="conteudo",
+        references=(
+            "https://cheatsheetseries.owasp.org/cheatsheets/HTML5_Security_Cheat_Sheet.html#local-storage",
+            "https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html",
+            "https://cwe.mitre.org/data/definitions/922.html",
+        ),
+        cwe="CWE-922",
+        owasp="A07:2021",
+        cis=("16.10", "3.3"),
+        tags=("sessao", "javascript", "conteudo"),
+    ),
+    KBEntry(
+        id="web.conteudo.credencial_literal",
+        title="Usuário e senha escritos no JavaScript do site",
+        category=Category.WEB,
+        severity=Severity.MEDIUM,
+        summary="O código entregue ao navegador traz uma senha literal; quem abrir o código-fonte a lê.",
+        explanation=(
+            "Foi encontrada uma senha escrita entre aspas no JavaScript (por exemplo, "
+            'senha: "...", ou um par usuário e senha no mesmo objeto). Um login conferido só no '
+            "navegador não é barreira de segurança: o código, e portanto a senha, é entregue a "
+            "todos os visitantes, e quem não quiser ler o código pode simplesmente pular a "
+            "verificação. Rótulos de formulário, placeholders, traduções, mensagens de validação "
+            "e nomes de campo são descartados; o valor encontrado aparece sempre mascarado. Por "
+            "ser uma leitura heurística, a confiança é tentativa: confira o trecho antes de agir."
+        ),
+        risk=(
+            "Qualquer pessoa entra com a credencial publicada. Se a mesma senha é usada em outro "
+            "sistema, o vazamento se estende a ele. Em demonstrações, o risco real é o hábito: "
+            "o mesmo desenho, levado à produção, deixa a área restrita aberta."
+        ),
+        steps=(
+            "Confirme no trecho indicado se o valor é uma senha real ou apenas um dado de "
+            "demonstração.",
+            "Se for real, troque a senha em todo lugar onde ela é usada e trate-a como vazada.",
+            "Mova a autenticação para o servidor: o navegador envia o que o usuário digitou e o "
+            "servidor confere contra um hash (bcrypt, Argon2) guardado fora do código público.",
+            "Para dados de teste, gere as credenciais na instalação e nunca as publique no "
+            "código entregue ao navegador.",
+        ),
+        examples=(
+            Fix(
+                "express",
+                "Node.js / Express (a conferência fica no servidor)",
+                "app.post('/login', async (req, res) => {\n"
+                "  const user = await usuarios.porEmail(req.body.email);\n"
+                "  if (!user || !(await bcrypt.compare(req.body.senha, user.hash))) {\n"
+                "    return res.status(401).json({ erro: 'Credenciais inválidas' });\n  }\n"
+                "  req.session.userId = user.id;\n  res.sendStatus(204);\n});",
+                "javascript",
+            ),
+            Fix(
+                "flask",
+                "Flask (hash no servidor)",
+                "from werkzeug.security import check_password_hash\n"
+                "if not user or not check_password_hash(user.hash, request.form['senha']):\n"
+                "    abort(401)",
+                "python",
+            ),
+        ),
+        verify=(
+            "Procure no código-fonte da página e dos scripts (Ctrl+U e F12 > Fontes) o início do "
+            "valor mascarado: ele não pode mais aparecer. Teste o login com a senha antiga; "
+            "deve falhar."
+        ),
+        effort="medio",
+        fix_group="conteudo",
+        references=(
+            _SECRETS,
+            "https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html",
+            "https://cwe.mitre.org/data/definitions/798.html",
+        ),
+        cwe="CWE-798",
+        owasp="A07:2021",
+        cis=("5.2",),
+        tags=("segredos", "autenticacao", "conteudo"),
     ),
     KBEntry(
         id="web.erro.detalhado",

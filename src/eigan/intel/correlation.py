@@ -76,6 +76,23 @@ SCENARIOS: tuple[Scenario, ...] = (
         breaker="Marcar o cookie de sessão como HttpOnly impede a leitura por script.",
     ),
     Scenario(
+        id="cenario.token_roubavel_por_xss",
+        title="Uma falha de XSS levaria ao roubo do token de sessão",
+        severity=Severity.MEDIUM,
+        requires=(
+            ("web.conteudo.token_localstorage",),
+            ("web.csp.*",),
+        ),
+        narrative=(
+            "O token de sessão fica em localStorage ou sessionStorage, legível por qualquer "
+            "script, e não há Content-Security-Policy que contenha scripts injetados. Um XSS "
+            "no site copia o token e o envia para fora, e o atacante age como o usuário."
+        ),
+        breaker=(
+            "Trocar o token por um cookie HttpOnly e adotar uma Content-Security-Policy restritiva."
+        ),
+    ),
+    Scenario(
         id="cenario.codigo_e_segredos_expostos",
         title="Código-fonte e segredos ao alcance de qualquer um",
         severity=Severity.CRITICAL,

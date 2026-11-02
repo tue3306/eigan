@@ -15,6 +15,7 @@ network            faixa CIDR              network
 port.open          host:porta/tcp          host, port
 service            host:porta              host, port, service, product, version, banner, tls
 tech               host:nome               host, name, version, kind, evidence
+web.frontend       origem (URL base)       url, backend (bool), sinais (lista de textos)
 tls.cert           host:porta              subject, issuer, not_before, not_after, san, ...
 local              plataforma              platform (windows | linux | darwin)
 host.info          plataforma              os, version, build, hostname, ...
@@ -38,6 +39,7 @@ NETWORK = "network"
 PORT_OPEN = "port.open"
 SERVICE = "service"
 TECH = "tech"
+WEB_FRONTEND = "web.frontend"
 TLS_CERT = "tls.cert"
 LOCAL = "local"
 HOST_INFO = "host.info"

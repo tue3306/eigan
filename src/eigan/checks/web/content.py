@@ -43,7 +43,9 @@ from .common import (
     site_of,
     skip_reason,
 )
+from .cookies import collect_cookies
 from .htmlscan import Element, Form, HtmlDoc, parse_html
+from .jsscan import find_literal_credentials, find_stored_tokens
 
 #: scripts da mesma origem lidos em busca de segredos (rápido, padrão, completo)
 SCRIPT_LIMITS = (3, 10, 25)
@@ -51,6 +53,8 @@ SCRIPT_LIMITS = (3, 10, 25)
 EXTRA_PAGES = 3
 MAX_LISTED = 8
 MAX_SECRETS = 20
+#: teto próprio dos achados de heurística do JavaScript: não podem gastar a cota dos segredos
+MAX_SCRIPT_FINDINGS = 20
 
 _ACTIVE_TAGS = frozenset({"script", "iframe", "frame", "object", "embed", "applet"})
 _PASSIVE_TAGS = frozenset({"img", "audio", "video", "source", "track"})
@@ -613,7 +617,7 @@ def _fetch_doc(ctx: CheckContext, url: str) -> tuple[HtmlDoc, str] | None:
     consumes=facts.HTTP_SERVICE,
     description=(
         "Examina a página inicial: conteúdo misto, scripts de terceiros sem SRI, formulários de "
-        "senha, segredos no HTML e JavaScript, páginas de erro verbosas e o depurador do Werkzeug."
+        "senha, segredos, tokens em localStorage e senhas literais no HTML e JavaScript, páginas de erro verbosas e o depurador do Werkzeug."
     ),
     findings=(
         "web.conteudo.misto_ativo",
@@ -624,10 +628,13 @@ def _fetch_doc(ctx: CheckContext, url: str) -> tuple[HtmlDoc, str] | None:
         "web.formulario.sem_csrf",
         "web.conteudo.segredo",
         "web.conteudo.chave_google",
+        "web.conteudo.token_localstorage",
+        "web.conteudo.credencial_literal",
         "web.erro.detalhado",
         "web.debug.modo_debug",
         "web.debug.werkzeug",
     ),
+    facts=(facts.WEB_FRONTEND,),
     order=44,
 )
 def check_content(ctx: CheckContext, fact: Fact) -> None:
@@ -654,12 +661,86 @@ def _analyze_page(ctx: CheckContext, page: Page, doc: HtmlDoc, tech: list[str]) 
     if profile_level(ctx) >= 2:
         pages += run_parallel(ctx, _extra_links(doc, page.origin), lambda u: _fetch_doc(ctx, u))
     seen: set[str] = set()
+    seen_js: set[str] = set()
     for item, text in pages:
         ctx.check_cancel()
         _check_mixed(ctx, page, item, tech)
         _check_sri(ctx, page, item, tech)
         _check_forms(ctx, item, tech)
         _report_secrets(ctx, item.url, text, tech, seen)
+        for inline in item.inline_scripts():
+            _report_script_findings(ctx, item.url, inline, tech, seen_js)
     for script_url, body in _scripts_for_secrets(ctx, page, doc):
         ctx.check_cancel()
         _report_secrets(ctx, script_url, body, tech, seen)
+        _report_script_findings(ctx, script_url, body, tech, seen_js)
+    _record_backend(ctx, page, [p for p, _ in pages])
+
+
+# -- JavaScript da mesma origem: token em storage e credencial literal -----------------------
+
+
+def _report_script_findings(
+    ctx: CheckContext, source: str, text: str, tech: list[str], seen: set[str]
+) -> None:
+    where = redact.redact(source)
+    for token in find_stored_tokens(text):
+        key = f"token:{token.storage}:{token.key}:{source}"
+        if key in seen or len(seen) >= MAX_SCRIPT_FINDINGS:
+            continue
+        seen.add(key)
+        ctx.report(
+            "web.conteudo.token_localstorage",
+            asset=where,
+            title=f"Token de sessão guardado em {token.storage}: chave “{short(token.key, 60)}”",
+            evidence=(
+                f"{where} grava a chave “{short(token.key, 60)}” em {token.storage} "
+                f"({token.value_kind}); qualquer script da página lê esse valor."
+            ),
+            details={"armazenamento": token.storage, "chave": short(token.key, 60), "local": where},
+            confidence=Confidence.TENTATIVE,
+            discriminator=key,
+            tech=tech,
+        )
+    for cred in find_literal_credentials(text):
+        shown = redact.mask(cred.value, keep=1)
+        key = f"cred:{cred.key.lower()}:{shown}:{source}"
+        if key in seen or len(seen) >= MAX_SCRIPT_FINDINGS:
+            continue
+        seen.add(key)
+        pair = "; há um usuário literal ao lado" if cred.paired else ""
+        ctx.report(
+            "web.conteudo.credencial_literal",
+            asset=where,
+            title=f"Senha literal no JavaScript: campo “{short(cred.key, 60)}”",
+            evidence=f"{where}: {short(cred.key, 60)} = {shown}{pair}",
+            details={
+                "campo": short(cred.key, 60),
+                "valor": shown,
+                "par_usuario_senha": cred.paired,
+                "local": where,
+            },
+            confidence=Confidence.TENTATIVE,
+            discriminator=key,
+            tech=tech,
+        )
+
+
+def _record_backend(ctx: CheckContext, page: Page, docs: list[HtmlDoc]) -> None:
+    """Anota se há sinais de um back end (sessão, formulário enviado ao servidor)."""
+    signs: list[str] = []
+    names = sorted({c.name for c, _ in collect_cookies(page.chain)})
+    if names:
+        signs.append("cookies emitidos pelo servidor: " + ", ".join(n[:40] for n in names[:5]))
+    for doc in docs:
+        sent = [f for f in doc.forms if f.method == "POST" and not f.scripted and not f.inert]
+        if sent:
+            signs.append(f"formulário POST em {doc.url}")
+    ctx.add_fact(
+        facts.WEB_FRONTEND,
+        page.origin,
+        "Registra se a página tem sinais de back end (cookies, formulários enviados ao servidor).",
+        url=page.origin,
+        backend=bool(signs),
+        sinais=signs[:5],
+    )

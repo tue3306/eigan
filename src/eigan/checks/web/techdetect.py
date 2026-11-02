@@ -193,6 +193,8 @@ HEADER_MARKERS: tuple[tuple[str, str | None, str, str], ...] = (
     ("x-vercel-id", None, "vercel", "cdn"),
     ("x-nf-request-id", None, "netlify", "cdn"),
     ("x-github-request-id", None, "github-pages", "service"),
+    ("rndr-id", None, "render", "service"),
+    ("x-render-origin-server", None, "render", "service"),
     ("x-drupal-cache", None, "drupal", "cms"),
     ("x-drupal-dynamic-cache", None, "drupal", "cms"),
     ("x-varnish", None, "varnish", "server"),

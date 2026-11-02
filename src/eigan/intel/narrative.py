@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..core import fmt
+from ..core import facts, fmt
 from ..core.models import Finding, ScanResult, Severity, TargetKind
 from ..core.settings import PROFILE_LABEL
 from . import scoring
@@ -32,6 +32,46 @@ NOT_EVALUATED = {
         "Nenhum registro de log reconhecido foi encontrado. Confira o caminho e o formato do log."
     ),
 }
+
+#: plataformas e CDNs que entregam HTTPS, HSTS e cabeçalhos por conta própria
+HOSTING_PLATFORMS = {
+    "cloudflare": "Cloudflare",
+    "render": "Render",
+    "vercel": "Vercel",
+    "netlify": "Netlify",
+    "github-pages": "GitHub Pages",
+    "fastly": "Fastly",
+    "cloudfront": "CloudFront",
+    "akamai": "Akamai",
+    "azure-front-door": "Azure Front Door",
+    "azure-cdn": "Azure CDN",
+}
+GOOD_GRADES = ("A+", "A", "B")
+_BACKEND_KINDS = ("language", "framework", "cms")
+#: servidores de aplicação e PaaS: rodam código do site mesmo sem cookie nem formulário na home
+_APP_SERVERS = frozenset(
+    {
+        "gunicorn",
+        "uvicorn",
+        "hypercorn",
+        "waitress",
+        "tomcat",
+        "jetty",
+        "kestrel",
+        "werkzeug",
+        "passenger",
+        "cowboy",
+        "puma",
+        "unicorn",
+        "thin",
+        "heroku",
+        "express",
+        "wildfly",
+        "weblogic",
+        "websphere",
+        "glassfish",
+    }
+)
 
 RISK_WORD = {
     Severity.CRITICAL: "crítico",
@@ -68,6 +108,33 @@ def _headline(
     if len(active) == 1:
         return "1 problema para corrigir, nenhum urgente."
     return f"{len(active)} problemas para corrigir, nenhum urgente."
+
+
+def platform_notice(result: ScanResult, posture: scoring.Posture) -> str:
+    """Aviso quando uma nota boa pode refletir a plataforma de hospedagem, não a aplicação.
+
+    Vale para alvo de site com nota boa, tecnologia de plataforma/CDN detectada e nenhum
+    sinal de back end (sem cookies do servidor, sem formulário enviado ao servidor, sem
+    linguagem, framework, CMS ou servidor de aplicação identificado).
+    """
+    if result.kind is not TargetKind.URL or posture.grade not in GOOD_GRADES:
+        return ""
+    names = {str(f.data.get("name", "")).lower(): f for f in result.facts if f.kind == facts.TECH}
+    platforms = [label for key, label in HOSTING_PLATFORMS.items() if key in names]
+    states = [f for f in result.facts if f.kind == facts.WEB_FRONTEND]
+    if not platforms or not states or any(f.data.get("backend") for f in states):
+        return ""
+    if any(name in _APP_SERVERS for name in names):
+        return ""
+    if any(f.data.get("kind") in _BACKEND_KINDS for f in names.values()):
+        return ""
+    return (
+        f"Atenção ao ler esta nota: o site é servido por {fmt.join_pt(platforms)} e não mostra "
+        "sinais de um back end (nenhum cookie de sessão, nenhum formulário enviado ao "
+        "servidor). O HTTPS, o HSTS e parte dos cabeçalhos podem ser da plataforma, e não da "
+        "aplicação. O resultado vale para o site como está publicado e nada diz sobre uma "
+        "aplicação que ainda não existe: quando houver login, sessão e API, audite de novo."
+    )
 
 
 def build(
@@ -115,6 +182,9 @@ def build(
                 f"({posture.score}/100). Isso vale para o que foi verificado; mantenha as "
                 "auditorias periódicas."
             )
+        notice = platform_notice(result, posture)
+        if notice:
+            paragraphs.append(notice)
 
     if scenarios:
         first = scenarios[0]
