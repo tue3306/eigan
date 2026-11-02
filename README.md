@@ -125,6 +125,7 @@ eigan checagens --categoria web
 eigan historico
 eigan comparar <id-anterior> <id-atual>
 eigan relatorio <id> --formatos pdf,html
+eigan atualizar    # só quando você pedir: baixa KEV, retire.js e sufixos públicos (--estado mostra a idade dos dados)
 ```
 
 Perfis: `rapido` (o essencial em minutos), `padrao` (recomendado) e `completo` (cobertura

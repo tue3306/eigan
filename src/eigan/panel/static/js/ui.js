@@ -182,6 +182,10 @@ export function dateTime(iso) {
 
 export function dateOnly(iso) {
   if (!iso) return "";
+  // AAAA-MM-DD é um dia do calendário, não um instante: passar por Date o leria como
+  // meia-noite UTC e mostraria o dia anterior em fusos a oeste (como o do Brasil).
+  const day = /^(\d{4})-(\d{2})-(\d{2})(?:$|T)/.exec(String(iso));
+  if (day) return `${day[3]}/${day[2]}/${day[1]}`;
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleDateString("pt-BR");

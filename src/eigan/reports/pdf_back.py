@@ -321,6 +321,8 @@ def closing(view: dict[str, Any], kit: Kit) -> None:
         if footer["kev_date"]:
             line += f", publicada em {footer['kev_date']}"
         lines.append(line + ".")
+    if footer["catalogs_line"]:
+        lines.append(footer["catalogs_line"])
     lines.append(f"Identificador da auditoria: {meta['scan_id']}.")
     kit.add(
         CondPageBreak(30 * mm),
@@ -329,6 +331,8 @@ def closing(view: dict[str, Any], kit: Kit) -> None:
     )
     for line in lines:
         kit.add(kit.text(line, "footnote", limit=MAX_CELL))
+    for notice in footer["catalog_notices"]:
+        kit.add(kit.para(f"<b>Atenção:</b> {markup(notice, MAX_CELL)}", "footnote_strong"))
     kit.add(
         kit.para(
             "<b>Use somente em sistemas que você tem autorização para avaliar.</b>",

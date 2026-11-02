@@ -30,7 +30,7 @@ from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
 from .. import APP_NAME, APP_TAGLINE, __version__
-from ..core import kb, paths, vulndb
+from ..core import atualizacao, kb, paths, vulndb
 from ..core.kb import EFFORT_LABEL, FIX_GROUPS, OWASP_2021
 from ..core.models import Category, Severity, TargetKind, TriageStatus
 from ..core.registry import all_checks, load_builtin_checks
@@ -158,6 +158,8 @@ ROUTES: list[Route] = [
         ("GET", r"^/api/comparar$", "compare"),
         ("GET", r"^/api/configuracoes$", "settings_get"),
         ("PUT", r"^/api/configuracoes$", "settings_put"),
+        ("GET", r"^/api/catalogos$", "catalogs_get"),
+        ("POST", r"^/api/catalogos/atualizar$", "catalogs_update"),
         ("POST", r"^/api/abrir-pasta$", "open_folder"),
         ("POST", r"^/api/escolher-caminho$", "pick_path"),
         ("POST", r"^/api/encerrar$", "shutdown"),
@@ -345,6 +347,7 @@ class PanelHandler(BaseHTTPRequestHandler):
                 "checks": len(all_checks()),
                 "kb_entries": stats.total,
                 "kev_catalog": vulndb.catalog_info(),
+                "catalogos": atualizacao.resumo(),
                 "running": self.app.jobs.active(),
             }
         )
@@ -582,6 +585,30 @@ class PanelHandler(BaseHTTPRequestHandler):
         settings = Settings.from_dict({**load_settings().to_dict(), **raw})
         save_settings(settings)
         self._json({"settings": settings.to_dict()})
+
+    # -- API: catálogos de dados ---------------------------------------------------------
+    def api_catalogs_get(self, **_: Any) -> None:
+        self._json({**atualizacao.resumo(), "atualizando": atualizacao.ocupado()})
+
+    def api_catalogs_update(self, **_: Any) -> None:
+        """Baixa os catálogos só quando o usuário clica; a auditoria nunca faz isso."""
+        body = self._body()
+        nomes = body.get("fontes") or list(atualizacao.PADRAO)
+        if not isinstance(nomes, list) or not all(
+            isinstance(n, str) and n in atualizacao.FONTES for n in nomes
+        ):
+            raise ApiError(HTTPStatus.BAD_REQUEST, "Fonte de dados desconhecida.")
+        try:
+            resultados = atualizacao.atualizar([str(n) for n in nomes])
+        except RuntimeError as exc:
+            raise ApiError(HTTPStatus.CONFLICT, str(exc)) from exc
+        self._json(
+            {
+                "ok": all(r["ok"] for r in resultados),
+                "resultados": resultados,
+                **atualizacao.resumo(),
+            }
+        )
 
     # -- API: integração com o sistema ---------------------------------------------------
     def api_open_folder(self, **_: Any) -> None:

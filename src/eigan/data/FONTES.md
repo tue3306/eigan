@@ -4,7 +4,10 @@ O EIGAN não consulta a Internet durante uma auditoria. Os arquivos desta pasta 
 pacote e do executável, e cada um registra no próprio JSON a fonte, a licença e a data em que
 foi obtido. Esta tabela reúne tudo em um só lugar e guarda os avisos que as licenças exigem.
 
-Para baixar os dados de novo, somente quando você pedir: `eigan atualizar`.
+Para baixar de novo, somente quando você pedir: `eigan atualizar` renova `kev.json`, `web_retire.json` e
+`dns_sufixos.json` (a cópia fica na pasta de dados do EIGAN e só vale se não for mais antiga que a
+embarcada). Os demais arquivos são curadoria manual e mudam só com uma nova versão do EIGAN;
+`eigan atualizar --estado` mostra a idade de cada um.
 
 | Arquivo | Conteúdo | Fonte | Licença | Obtido em |
 |---|---|---|---|---|

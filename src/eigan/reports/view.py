@@ -73,7 +73,7 @@ def build_view(result: ScanResult) -> dict[str, Any]:
         "diff": diff(result, analysis.get("diff")),
         "inventory": inventory(as_dict(analysis.get("inventory"))),
         "timeline": timeline(result),
-        "footer": footer(as_dict(analysis.get("kev_catalog"))),
+        "footer": footer(as_dict(analysis.get("kev_catalog")), as_dict(analysis.get("catalogos"))),
     }
     view["toc"] = _toc(view)
     _drop_dead_links(view)

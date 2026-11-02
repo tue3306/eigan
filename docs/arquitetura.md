@@ -71,6 +71,13 @@ versão vulneráveis, datas de fim de suporte, assinaturas de serviços e de
 subdomínios órfãos. A origem e a licença de cada arquivo estão em
 `src/eigan/data/FONTES.md`.
 
+Três catálogos (KEV, retire.js e sufixos públicos) podem ser renovados com `eigan atualizar` ou pelo
+botão em Sobre no painel, nunca durante uma auditoria (`core/atualizacao.py`). O download é só HTTPS, com
+teto de tamanho, conversão para o formato embarcado e validação; a cópia vai para
+`<dados do EIGAN>/dados/` por troca atômica e `data.load_json` só a usa se estiver íntegra e não for mais
+antiga que a embarcada. A idade de cada catálogo aparece no resultado, nos relatórios e no painel, com
+aviso depois de 30 dias.
+
 ## Inteligência sem IA (`intel/`)
 
 | Módulo | Função |
@@ -132,9 +139,9 @@ HTML (arquivo único, sem JavaScript), PDF executivo (A4), JSON completo, SARIF
 ## Linha de comando (`cli/`)
 
 `eigan` sem argumentos abre o painel. Comandos: `auditar`, `checagens`,
-`explicar`, `historico`, `relatorio`, `comparar`, `painel`, `versao`. Códigos de
-saída: 0 sucesso, 1 achado acima do limite de `--falhar-em`, 2 erro, 130
-cancelado.
+`explicar`, `historico`, `relatorio`, `comparar`, `atualizar`, `painel`, `versao`.
+Códigos de saída: 0 sucesso, 1 achado acima do limite de `--falhar-em` (ou, em
+`atualizar`, alguma fonte que falhou), 2 erro, 130 cancelado.
 
 ## Executáveis (`packaging/`)
 

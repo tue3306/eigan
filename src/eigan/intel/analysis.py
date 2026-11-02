@@ -15,7 +15,7 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import Any
 
-from ..core import vulndb
+from ..core import atualizacao, vulndb
 from ..core.models import Category, ScanResult, Severity
 from . import compliance, correlation, diff, inventory, narrative, remediation, scoring
 
@@ -121,6 +121,7 @@ def analyze(result: ScanResult, previous: ScanResult | None = None) -> dict[str,
         "diff": comparison,
         "stats": _stats(result),
         "kev_catalog": vulndb.catalog_info(),
+        "catalogos": atualizacao.resumo(),
     }
     if not evaluated:
         analysis["narrative"]["paragraphs"] = analysis["narrative"]["paragraphs"][:1]

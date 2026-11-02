@@ -16,6 +16,7 @@ catálogo CISA KEV embarcado. Nenhuma consulta externa é feita sobre o que foi 
 from __future__ import annotations
 
 import hashlib
+import importlib
 import re
 import time
 from collections.abc import Iterable, Mapping
@@ -63,6 +64,8 @@ _BUILD_SUFFIX = re.compile(
 #: ``\s`` (ou classe com ``\s``) seguido de ``+``/``*`` sem limite: quadrático em texto hostil
 _OPEN_SPACE_RUN = re.compile(r"(\[(?:\\.|[^\]\\])*\\s(?:\\.|[^\]\\])*\]|\\s)([+*])")
 _RUN_LIMIT = 100
+#: padrões maiores que isto (a base embarcada não chega perto) são descartados
+_PATTERN_MAX = 1000
 #: o começo do arquivo basta para banners e versões; o resto só custaria tempo
 SCAN_MAX_CHARS = 400_000
 #: pacotes npm sem ``npmname`` na base, cujo nome na base é o mesmo do pacote
@@ -214,7 +217,70 @@ def _bounded_run(match: re.Match[str]) -> str:
     return f"{match.group(1)}{{{low},{_RUN_LIMIT}}}"
 
 
+_REPETICOES = ("MAX_REPEAT", "MIN_REPEAT", "POSSESSIVE_REPEAT")
+
+
+def _repeticao_aninhada(itens: Any, dentro: bool, maxrepeat: int) -> bool:
+    """Há repetição sem teto dentro de outra repetição sem teto (backtracking exponencial)?"""
+    lista = list(itens)
+    for posicao, (operacao, valor) in enumerate(lista):
+        nome = str(operacao)
+        if nome in _REPETICOES:
+            _, maximo, corpo = valor
+            sem_teto = maximo >= maxrepeat or maximo > _RUN_LIMIT
+            # ``(.*\n)*``: o ``.`` não atravessa a quebra de linha que fecha cada volta,
+            # então não há mais de uma divisão possível (padrões da base do jQuery UI).
+            seguinte = lista[posicao + 1] if posicao + 1 < len(lista) else None
+            por_linha = [str(o) for o, _ in corpo] == ["ANY"] and (
+                seguinte is not None and str(seguinte[0]) == "LITERAL" and seguinte[1] == 10
+            )
+            if sem_teto and dentro and not por_linha:
+                return True
+            if _repeticao_aninhada(corpo, dentro or sem_teto, maxrepeat):
+                return True
+        elif nome == "SUBPATTERN":
+            if _repeticao_aninhada(valor[-1], dentro, maxrepeat):
+                return True
+        elif nome == "BRANCH":
+            if any(_repeticao_aninhada(ramo, dentro, maxrepeat) for ramo in valor[1]):
+                return True
+        elif nome == "ATOMIC_GROUP" and _repeticao_aninhada(valor, dentro, maxrepeat):
+            return True
+    return False
+
+
+def padrao_perigoso(pattern: str) -> bool:
+    """Padrão que não compila ou que tem repetições sem teto aninhadas, como ``(a+)+``.
+
+    O Python não interrompe uma busca no meio de um padrão; o orçamento de tempo só é
+    conferido entre um padrão e outro. Por isso um padrão assim, vindo de uma cópia
+    baixada que ninguém revisou, é descartado em vez de compilado.
+    """
+    analisador = importlib.import_module("re._parser")
+    try:
+        arvore = analisador.parse(_to_python(pattern), re.ASCII)
+    except (re.error, RecursionError, OverflowError):
+        return True
+    return bool(_repeticao_aninhada(arvore, False, int(analisador.MAXREPEAT)))
+
+
+def padrao_suspeito(extractors: Mapping[str, Any]) -> str | None:
+    """O primeiro padrão de uma biblioteca da base que ``padrao_perigoso`` recusa."""
+    for campo in ("uri", "filename", "filecontent"):
+        for pattern in extractors.get(campo) or ():
+            if len(pattern) > _PATTERN_MAX or padrao_perigoso(pattern):
+                return str(pattern)
+    for spec in extractors.get("filecontentreplace") or ():
+        partes = _REPLACE_SPEC.match(spec)
+        if partes and (len(spec) > _PATTERN_MAX or padrao_perigoso(partes.group(1))):
+            return str(spec)
+    return None
+
+
 def _compile(pattern: str, skipped: list[str]) -> re.Pattern[str] | None:
+    if len(pattern) > _PATTERN_MAX or padrao_perigoso(pattern):
+        skipped.append(pattern)
+        return None
     try:
         compiled = re.compile(_to_python(pattern), re.ASCII)
     except re.error:

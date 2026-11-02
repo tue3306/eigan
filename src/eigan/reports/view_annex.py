@@ -250,10 +250,29 @@ def timeline(result: ScanResult) -> dict[str, Any]:
     }
 
 
-def footer(catalog: dict[str, Any]) -> dict[str, Any]:
+_CATALOG_SHORT = {"kev": "CISA KEV", "retire": "retire.js", "sufixos": "sufixos públicos"}
+
+
+def _catalogs_line(catalogs: dict[str, Any]) -> str:
+    """Uma linha com a data de cada catálogo atualizável usado na auditoria."""
+    parts = []
+    for item in as_list(catalogs.get("catalogos")):
+        row = as_dict(item)
+        if not row.get("atualizavel") or not row.get("data"):
+            continue
+        name = _CATALOG_SHORT.get(str(row.get("nome")), str(row.get("nome")))
+        origin = "baixado" if row.get("origem") == "baixado" else "embarcado"
+        parts.append(f"{name} de {fmt.date_only(str(row['data']))} ({origin})")
+    return "Dados desta auditoria: " + ", ".join(parts) + "." if parts else ""
+
+
+def footer(catalog: dict[str, Any], catalogs: dict[str, Any] | None = None) -> dict[str, Any]:
+    catalogs = catalogs or {}
     return {
         "generator": __version__,
         "kev_version": str(catalog.get("versao") or ""),
         "kev_date": fmt.date_only(str(catalog.get("publicado") or "")),
         "kev_total": as_int(catalog.get("total")),
+        "catalogs_line": _catalogs_line(catalogs),
+        "catalog_notices": [str(t) for t in as_list(catalogs.get("avisos"))],
     }

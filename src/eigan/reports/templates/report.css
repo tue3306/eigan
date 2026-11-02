@@ -373,6 +373,7 @@ details.timeline > summary { font-weight: 600; }
 .footer { margin-top: 44px; padding-top: 18px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
 .footer p { margin: 0 0 4px; }
 .footer .auth { color: var(--ink-2); font-weight: 600; }
+.footer .stale { margin: 6px 0; padding: 6px 10px; border-left: 3px solid var(--med-fg); background: var(--med-bg); color: var(--ink-2); }
 
 /* telas estreitas */
 @media (max-width: 760px) {

@@ -18,7 +18,7 @@ from helpers import Route, run_check
 
 from eigan.checks.code import cvss, dependencies, osv
 from eigan.checks.code.dependencies_kb import MALICIOUS, VULNERABLE
-from eigan.core import paths
+from eigan.core import baixar, paths
 from eigan.core.models import Severity
 
 
@@ -654,7 +654,7 @@ def test_download_baixa_de_verdade_com_certificado_confiavel(
     monkeypatch.setattr(osv, "OSV_URL", f"https://127.0.0.1:{srv.port}/{{ecosystem}}/all.zip")
     context = ssl.create_default_context(cafile=str(FIXTURES / "tls" / "localhost.crt"))
     context.check_hostname = False
-    monkeypatch.setattr(osv.ssl, "create_default_context", lambda: context)
+    monkeypatch.setattr(baixar.ssl, "create_default_context", lambda: context)
     result = osv.download_osv(["npm"], root=tmp_path, timeout=5.0)
     assert result["npm"]["ok"] is True, result
     assert (tmp_path / "npm" / "all.zip").read_bytes() == body

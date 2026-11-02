@@ -16,17 +16,14 @@ from __future__ import annotations
 
 import json
 import os
-import ssl
 import threading
-import urllib.error
-import urllib.request
 import zipfile
-from collections.abc import Callable, Iterable, Iterator
+from collections.abc import Iterable, Iterator
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote, urlsplit
+from urllib.parse import quote
 
-from ...core import paths
+from ...core import baixar, paths
 from ...core.models import Severity, now_iso
 from .advisories import Advisory, package_key
 from .cvss import severity_from_vector
@@ -51,11 +48,10 @@ MAX_DOWNLOAD_BYTES = 800_000_000
 MAX_UNCOMPRESSED_BYTES = 20_000_000_000
 MAX_RECORD_BYTES = 5_000_000
 MAX_RECORDS = 2_000_000
-_CHUNK = 1 << 20
 
 _GHSA_SEVERITY = {"CRITICAL": "critical", "HIGH": "high", "MODERATE": "medium", "LOW": "low"}
 
-Opener = Callable[..., Any]
+Opener = baixar.Opener
 
 
 def osv_root() -> Path:
@@ -373,27 +369,8 @@ def _severity(
 # -- download (comando de atualização, nunca durante a auditoria) ---------------------
 
 
-class _HttpsOnlyRedirect(urllib.request.HTTPRedirectHandler):
-    """Segue redirecionamentos apenas para endereços https://."""
-
-    def redirect_request(
-        self,
-        req: urllib.request.Request,
-        fp: Any,
-        code: int,
-        msg: str,
-        headers: Any,
-        newurl: str,
-    ) -> urllib.request.Request | None:
-        if urlsplit(newurl).scheme != "https":
-            raise urllib.error.URLError(f"redirecionamento para fora de HTTPS recusado: {newurl}")
-        return super().redirect_request(req, fp, code, msg, headers, newurl)
-
-
-def _https_opener() -> Opener:
-    """Abridor com certificado validado e redirecionamentos só para HTTPS."""
-    handler = urllib.request.HTTPSHandler(context=ssl.create_default_context())
-    return urllib.request.build_opener(_HttpsOnlyRedirect(), handler).open
+_HttpsOnlyRedirect = baixar.HttpsOnlyRedirect
+_https_opener = baixar.https_opener
 
 
 def download_osv(
@@ -431,25 +408,7 @@ def download_osv(
     return results
 
 
-def _fetch_to(url: str, target: Path, timeout: float, fetch: Opener, max_bytes: int) -> int:
-    """Grava a resposta em ``target`` respeitando o limite de tamanho."""
-    if not url.startswith("https://"):
-        raise ValueError("só downloads https:// são permitidos")
-    total = 0
-    with fetch(url, timeout=timeout) as response:
-        final = str(getattr(response, "geturl", lambda: url)() or url)
-        if not final.startswith("https://"):
-            raise ValueError("a resposta veio de um endereço que não é https://")
-        declared = (getattr(response, "headers", None) or {}).get("Content-Length")
-        if declared and str(declared).isdigit() and int(declared) > max_bytes:
-            raise ValueError("arquivo maior que o limite de download")
-        with target.open("wb") as out:
-            while chunk := response.read(_CHUNK):
-                total += len(chunk)
-                if total > max_bytes:
-                    raise ValueError("arquivo maior que o limite de download")
-                out.write(chunk)
-    return total
+_fetch_to = baixar.fetch_to
 
 
 def _download_one(

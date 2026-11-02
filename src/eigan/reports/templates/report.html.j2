@@ -495,6 +495,8 @@
 <footer class="footer">
   <p>Gerado pelo EIGAN {{ footer.generator }} em {{ meta.generated }} — análise local por regras, sem IA e sem envio de dados.</p>
   {% if footer.kev_version %}<p>Catálogo CISA KEV embarcado: versão {{ footer.kev_version }}{% if footer.kev_date %}, publicada em {{ footer.kev_date }}{% endif %}{% if footer.kev_total %} ({{ footer.kev_total }} vulnerabilidades){% endif %}.</p>{% endif %}
+  {% if footer.catalogs_line %}<p>{{ footer.catalogs_line }}</p>{% endif %}
+  {% for notice in footer.catalog_notices %}<p class="stale"><strong>Atenção:</strong> {{ notice }}</p>{% endfor %}
   <p>Identificador da auditoria: <code>{{ meta.scan_id }}</code></p>
   <p class="auth">Use somente em sistemas que você tem autorização para avaliar.</p>
 </footer>

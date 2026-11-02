@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from .. import APP_NAME, APP_TAGLINE, __version__
-from ..core import fmt, kb
+from ..core import atualizacao, fmt, kb
 from ..core.models import ScanResult, Severity, TargetKind
 from ..core.registry import all_checks, load_builtin_checks
 from ..core.settings import PROFILE_LABEL, PROFILES, load_settings
@@ -129,6 +129,38 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("comparar", aliases=["diff"], help="compara duas auditorias do mesmo alvo")
     p.add_argument("anterior")
     p.add_argument("atual")
+
+    p = sub.add_parser(
+        "atualizar",
+        aliases=["update"],
+        help="baixa os catálogos de dados mais novos (só quando você pede)",
+        description=(
+            "A auditoria nunca acessa a Internet para buscar dados. Este comando, e só ele, baixa "
+            "por HTTPS o catálogo CISA KEV, a base do retire.js e a lista de sufixos públicos, "
+            "valida e guarda uma cópia na pasta de dados do EIGAN (a cópia só vale se não for mais "
+            "antiga que a embarcada). Verificações de curadoria manual (fim de suporte, faixas de "
+            "versão de serviços, CMS, takeover, TLS, portas) mudam só com uma nova versão do EIGAN."
+        ),
+    )
+    p.add_argument(
+        "--fontes",
+        help=f"o que atualizar, separado por vírgula: {', '.join(atualizacao.PADRAO)} (padrão: todas)",
+    )
+    p.add_argument(
+        "--osv",
+        help="também baixa a base do OSV.dev dos ecossistemas citados (grande), ex.: npm,PyPI",
+    )
+    p.add_argument(
+        "--estado",
+        action="store_true",
+        help="só mostra a versão, a idade e a origem de cada catálogo (não baixa nada)",
+    )
+    p.add_argument(
+        "--saida",
+        type=Path,
+        help="grava no formato embarcado nesta pasta, sem alterar os dados em uso (manutenção)",
+    )
+    p.add_argument("--json", action="store_true", help="imprime o resultado em JSON")
 
     sub.add_parser("versao", aliases=["version"], help="mostra a versão")
     return parser
@@ -472,6 +504,113 @@ def cmd_compare(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _origem_texto(origem: str) -> str:
+    return "baixado" if origem == "baixado" else "embarcado"
+
+
+def _versao_curta(versao: Any) -> str:
+    """A versão sem o detalhe entre parênteses (ex.: o commit da lista de sufixos)."""
+    return str(versao).split(" (")[0]
+
+
+def _print_status(console: Console, linhas: list[dict[str, Any]]) -> None:
+    console.rule("Catálogos de dados")
+    for linha in linhas:
+        if not linha["atualizavel"]:
+            continue
+        idade = linha["idade_dias"]
+        idade_texto = "idade desconhecida" if idade is None else fmt.plural(idade, "dia", "dias")
+        versao = _versao_curta(linha["versao"] or "sem versão")
+        nome = console.bold(f"{linha['nome']:<10}")
+        console.line(f"  {nome} {versao} · {idade_texto} · {_origem_texto(linha['origem'])}")
+        console.wrap(linha["titulo"], indent="      ")
+    console.line()
+    console.line(console.bold("Curadoria manual (mudam com uma nova versão do EIGAN)"))
+    for linha in linhas:
+        if not linha["atualizavel"]:
+            console.line(f"  {linha['nome']} · {linha['data'] or 'sem data'} · {linha['titulo']}")
+    for aviso in atualizacao.avisos(linhas):
+        console.wrap(aviso, indent="  ", first=console.severity("! ", "medium"))
+
+
+def cmd_update(args: argparse.Namespace) -> int:
+    console = Console(sys.stderr if args.json else sys.stdout)
+    if args.estado:
+        if args.fontes is not None or args.osv or args.saida:
+            console.line("Erro: --estado não pode ser usado com --fontes, --osv ou --saida.")
+            return EXIT_ERROR
+        linhas = atualizacao.estado()
+        if args.json:
+            print(json.dumps(linhas, ensure_ascii=False, indent=2))
+        else:
+            _print_status(console, linhas)
+        return EXIT_OK
+
+    nomes = [n.strip().lower() for n in (args.fontes or "").split(",") if n.strip()]
+    if args.fontes is not None and not nomes:
+        console.line(f"Erro: --fontes sem nenhuma fonte. Use {', '.join(atualizacao.PADRAO)}.")
+        return EXIT_ERROR
+    unknown = [n for n in nomes if n not in atualizacao.FONTES]
+    if unknown:
+        console.line(
+            f"Erro: fonte desconhecida: {', '.join(unknown)}. Use {', '.join(atualizacao.PADRAO)}."
+        )
+        return EXIT_ERROR
+    ecossistemas: list[str] = []
+    if args.osv:
+        from ..checks.code.osv import ECOSYSTEMS
+
+        if args.saida:
+            console.line(
+                "Erro: --osv não pode ser usado com --saida (a base do OSV não é embarcada)."
+            )
+            return EXIT_ERROR
+        wanted = {e.lower(): e for e in ECOSYSTEMS}
+        for item in (e.strip() for e in args.osv.split(",") if e.strip()):
+            if item.lower() not in wanted:
+                console.line(
+                    f"Erro: ecossistema desconhecido: {item}. Use {', '.join(ECOSYSTEMS)}."
+                )
+                return EXIT_ERROR
+            ecossistemas.append(wanted[item.lower()])
+
+    if not args.json:
+        console.line(console.dim("Baixando por HTTPS; a auditoria nunca faz isso sozinha."))
+    try:
+        results = atualizacao.atualizar(nomes or None, saida=args.saida)
+        if ecossistemas:
+            results += atualizacao.atualizar_osv(ecossistemas)
+    except RuntimeError as exc:
+        console.line(f"Erro: {exc}")
+        return EXIT_ERROR
+
+    failed = [r for r in results if not r["ok"]]
+    if args.json:
+        payload = {"ok": not failed, "fontes": results, "catalogos": atualizacao.estado()}
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+    else:
+        for r in results:
+            if not r["ok"]:
+                console.line(f"{console.severity('✗', 'high')} {r['nome']}: {r['erro']}")
+                continue
+            detail = f"{r.get('itens')} itens"
+            if r.get("versao"):
+                detail = f"{_versao_curta(r['versao'])} · {detail}"
+            if r.get("gravado"):
+                console.line(
+                    f"{console.severity('✓', 'low')} {r['nome']}: {detail} · {r['arquivo']}"
+                )
+            else:
+                console.line(
+                    f"{console.severity('✓', 'low')} {r['nome']}: {detail} · {r.get('motivo', 'sem alterações')}"
+                )
+        if failed:
+            console.line(
+                f"{len(failed)} de {len(results)} fontes falharam; os dados anteriores foram mantidos."
+            )
+    return EXIT_FAIL_ON if failed else EXIT_OK
+
+
 def cmd_version(_args: argparse.Namespace) -> int:
     print(f"EIGAN {__version__} — {APP_TAGLINE}")
     print("Blue team, por regras: sem IA, sem chaves de API, sem envio de dados.")
@@ -495,6 +634,8 @@ COMMANDS = {
     "report": cmd_report,
     "comparar": cmd_compare,
     "diff": cmd_compare,
+    "atualizar": cmd_update,
+    "update": cmd_update,
     "versao": cmd_version,
     "version": cmd_version,
 }
