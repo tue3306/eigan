@@ -1,0 +1,503 @@
+{#- Relatório HTML do EIGAN: autocontido, sem JavaScript e sem recursos externos.
+    Todo texto dinâmico passa pelo escape automático do Jinja; links só para http(s). -#}
+{%- macro sev_chip(sev) -%}
+<span class="chip sev-{{ sev.value }}">{{ sev.label }}</span>
+{%- endmacro -%}
+{%- macro band_chip(band, plain=false) -%}
+<span class="chip band {{ 'band-plain' if plain else 'band-' ~ band.css }}">{{ band.value }}</span>
+{%- endmacro -%}
+{%- macro link(item) -%}
+{%- if item.url -%}<a href="{{ item.url }}" rel="noopener noreferrer" target="_blank">{{ item.text }}</a>{%- else -%}{{ item.text }}{%- endif -%}
+{%- endmacro -%}
+{%- macro plural(n, one, many) -%}{{ n }} {{ one if n == 1 else many }}{%- endmacro -%}
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="generator" content="EIGAN {{ meta.generator }}">
+<title>Relatório de segurança: {{ meta.target }}</title>
+<style>
+{% include "report.css" %}
+</style>
+</head>
+<body>
+<div class="page">
+
+<header class="cover">
+  <div class="brand">
+    {% include "emblem.svg" %}
+    <div>
+      <div class="brand-name">EIGAN</div>
+      <div class="brand-tag">Auditoria de segurança local, por regras</div>
+    </div>
+  </div>
+  <h1>Relatório de auditoria de segurança</h1>
+  <p class="target">{{ meta.target }}</p>
+  <dl class="meta">
+    <div><dt>Tipo de alvo</dt><dd>{{ meta.kind }}</dd></div>
+    <div><dt>Perfil</dt><dd>{{ meta.profile }}</dd></div>
+    <div><dt>Início</dt><dd class="num">{{ meta.started or "—" }}</dd></div>
+    <div><dt>Duração</dt><dd class="num">{{ meta.duration or "—" }}</dd></div>
+    <div><dt>Verificações</dt><dd class="num">{{ meta.checks_text }}</dd></div>
+    <div><dt>Versão do EIGAN</dt><dd class="num">{{ meta.version }}</dd></div>
+    {% if meta.status != "concluida" %}
+    <div><dt>Situação</dt><dd>{{ meta.status_label }}</dd></div>
+    {% endif %}
+  </dl>
+  {% if meta.status_note %}
+  <p class="notice" role="note">{{ meta.status_note }}</p>
+  {% endif %}
+</header>
+
+<main>
+<section class="verdict-section" id="veredito" aria-labelledby="veredito-titulo">
+  <h2 id="veredito-titulo" class="sr-only">Veredito</h2>
+  <div class="verdict">
+    {% if verdict.evaluated %}
+    <div class="grade grade-{{ verdict.grade_css }}" role="img" aria-label="Nota {{ verdict.grade }}, {{ verdict.score }} de 100, {{ verdict.label }}">
+      <span class="letter grade-{{ verdict.grade_css }}">{{ verdict.grade }}</span>
+      <span class="score">{{ verdict.score }}<small>/100</small></span>
+      <span class="label grade-{{ verdict.grade_css }}">{{ verdict.label }}</span>
+    </div>
+    {% else %}
+    <div class="grade grade-none" role="img" aria-label="Sem nota: não foi possível avaliar">
+      <span class="letter grade-none">—</span>
+      <span class="label grade-none">Não avaliado</span>
+    </div>
+    {% endif %}
+    <div>
+      {% if verdict.evaluated %}
+      <p class="headline">{{ verdict.headline }}</p>
+      {% if verdict.cap_reason %}<p class="cap">{{ verdict.cap_reason }}</p>{% endif %}
+      {% if verdict.what_if %}<p class="what-if">{{ verdict.what_if }}</p>{% endif %}
+      {% else %}
+      <p class="headline">Não foi possível avaliar este alvo</p>
+      <p class="cap">{{ verdict.headline }}</p>
+      <p class="what-if">Sem respostas, o EIGAN não atribui nota: uma nota alta aqui daria uma falsa sensação de segurança. A linha do tempo, no fim do relatório, mostra o que foi tentado.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if verdict.evaluated %}
+  <ul class="counts" aria-label="Achados abertos por severidade">
+    {% for c in verdict.counts %}
+    <li class="{{ 'zero' if c.n == 0 else '' }}"><span class="n n-{{ c.key }}">{{ c.n }}</span><span class="l">{{ c.label }}</span></li>
+    {% endfor %}
+  </ul>
+  <table class="bands" aria-label="Achados abertos por prioridade">
+    {% for p in verdict.priorities %}
+    <tr>
+      <td class="band-chip">{{ band_chip(p.band) }}</td>
+      <td>{{ p.band.text }}</td>
+      <td class="count">{{ plural(p.n, "achado", "achados") }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  <p class="counts-note small muted">
+    Os números contam achados abertos; informativos não afetam a nota{% if verdict.triaged %} e {{ plural(verdict.triaged, "achado triado fica", "achados triados ficam") }} de fora (risco aceito, falso positivo ou marcado como corrigido){% endif %}.
+  </p>
+  {% endif %}
+
+  {% if toc %}
+  <nav class="toc" aria-label="Seções do relatório">
+    <p class="toc-title">Neste relatório</p>
+    <ul>
+      {% for item in toc %}<li><a href="#{{ item.anchor }}">{{ item.title }}</a></li>{% endfor %}
+    </ul>
+  </nav>
+  {% endif %}
+</section>
+
+{% if summary.paragraphs or summary.top_risks %}
+<section class="block" id="resumo" aria-labelledby="resumo-titulo">
+  <h2 id="resumo-titulo">Resumo</h2>
+  <div class="prose">
+    {% for paragraph in summary.paragraphs %}<p>{{ paragraph }}</p>{% endfor %}
+  </div>
+  {% if summary.top_risks %}
+  <h3 class="subhead">Principais riscos</h3>
+  <ol class="risks">
+    {% for r in summary.top_risks %}
+    <li>
+      {{ band_chip(r.band) }} {{ sev_chip(r.severity) }}
+      {% if r.anchor %}<a class="risk-title" href="#{{ r.anchor }}">{{ r.title }}</a>{% else %}<span class="risk-title">{{ r.title }}</span>{% endif %}
+      <span class="muted">em</span> <span class="asset">{{ r.asset }}</span>
+      {% if r.risk %}<p>{{ r.risk }}</p>{% endif %}
+    </li>
+    {% endfor %}
+  </ol>
+  {% endif %}
+</section>
+{% endif %}
+
+{% if scenarios %}
+<section class="block" id="cenarios" aria-labelledby="cenarios-titulo">
+  <h2 id="cenarios-titulo">Cenários de risco</h2>
+  <p class="section-intro">Problemas que, juntos, abrem um caminho de ataque mais grave do que cada um isolado. Quebrar um elo já interrompe a cadeia.</p>
+  {% for s in scenarios %}
+  <article class="scenario">
+    <h3>{{ s.title }} {{ sev_chip(s.severity) }}</h3>
+    <p>{{ s.narrative }}</p>
+    <p><strong>Como quebrar a cadeia:</strong> {{ s.breaker }}</p>
+    <p><span class="k">Onde:</span> <span class="asset">{{ s.where }}</span></p>
+    {% if s.titles %}
+    <p class="small tight"><span class="k">Problemas envolvidos:</span></p>
+    <ul class="small">{% for t in s.titles %}<li>{{ t }}</li>{% endfor %}</ul>
+    {% endif %}
+  </article>
+  {% endfor %}
+</section>
+{% endif %}
+
+{% if plan %}
+<section class="block" id="plano" aria-labelledby="plano-titulo">
+  <h2 id="plano-titulo">Plano de correção</h2>
+  <p class="section-intro">
+    {{ plural(plan|length, "ação", "ações") }}, na ordem recomendada. Cada ação resolve um grupo de problemas com a mesma correção{% if quick_wins %}; {{ plural(quick_wins, "é um ganho rápido", "são ganhos rápidos") }} (esforço baixo e prioridade relevante){% endif %}.
+  </p>
+  {% for a in plan %}
+  <article class="action" id="{{ a.anchor }}">
+    <div class="action-index" aria-hidden="true">{{ a.index }}</div>
+    <div>
+      <h3>{{ a.title }}</h3>
+      <p class="action-band">{{ band_chip(a.band) }} {{ a.band.text }}</p>
+      <ul class="meta-list">
+        {% if a.area %}<li><span class="k">Área</span>{{ a.area }}</li>{% endif %}
+        <li><span class="k">Esforço</span>{{ a.effort }}</li>
+        {% if a.gain_text %}<li><span class="k">Efeito na nota</span><strong class="num">{{ a.gain_text }}</strong></li>{% endif %}
+        <li><span class="k">Ocorrências</span><span class="num">{{ a.count }}</span></li>
+        {% if a.quick_win %}<li><span class="chip chip-quick">Ganho rápido</span></li>{% endif %}
+        {% if a.kev %}<li><span class="chip chip-kev">Exploração ativa (CISA KEV)</span></li>{% endif %}
+      </ul>
+      {% if a.assets %}
+      <p class="assets small"><span class="k">Ativos afetados:</span>
+        {% for asset in a.assets %}<code>{{ asset }}</code>{% endfor %}
+        {% if a.more_assets %}<span class="muted">e mais {{ a.more_assets }}</span>{% endif %}
+      </p>
+      {% endif %}
+      {% for p in a.problems %}
+      <div class="problem">
+        <h4><a href="#{{ p.anchor }}">{{ p.title }}</a> {{ sev_chip(p.severity) }} <span class="muted small">{{ plural(p.count, "ocorrência", "ocorrências") }}</span></h4>
+        {% if p.summary and p.summary != p.title %}<p class="summary">{{ p.summary }}</p>{% endif %}
+        {% if p.steps %}
+        <ol class="steps">{% for step in p.steps %}<li>{{ step }}</li>{% endfor %}</ol>
+        {% endif %}
+        {% if p.verify %}<p class="verify"><strong>Como verificar:</strong> {{ p.verify }}</p>{% endif %}
+      </div>
+      {% endfor %}
+      {% if a.fixes %}
+      <div class="fixes">
+        {% for fx in a.fixes %}
+        <details class="fix"{% if fx.open %} open{% endif %}>
+          <summary>Exemplo de correção: {{ fx.label }}</summary>
+          <pre class="code"><code>{{ fx.code }}</code></pre>
+        </details>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+  </article>
+  {% endfor %}
+</section>
+{% endif %}
+
+{% if groups %}
+<section class="block" id="achados" aria-labelledby="achados-titulo">
+  <h2 id="achados-titulo">Achados</h2>
+  <p class="section-intro">
+    {{ plural(overview.total, "achado", "achados") }}, agrupados por tipo de problema:
+    {{ plural(overview.open, "aberto que conta", "abertos que contam") }} para a nota{% if overview.info %}, {{ plural(overview.info, "informativo", "informativos") }}{% endif %}{% if overview.triaged %} e {{ plural(overview.triaged, "triado", "triados") }}{% endif %}.
+  </p>
+  {% for g in groups %}
+  <article class="fgroup" id="{{ g.anchor }}">
+    <h3>{{ g.title }}</h3>
+    <p class="fgroup-meta">
+      {{ sev_chip(g.severity) }}
+      <span>{{ g.category }}</span>
+      <span class="num">{{ plural(g.count, "ocorrência", "ocorrências") }}</span>
+      <code>{{ g.check_id }}</code>
+      {% if g.cwe %}<span>{% if g.cwe_url %}<a href="{{ g.cwe_url }}" rel="noopener noreferrer" target="_blank">{{ g.cwe }}</a>{% else %}{{ g.cwe }}{% endif %}</span>{% endif %}
+      {% if g.owasp_label %}<span>OWASP {{ g.owasp_label }}</span>{% endif %}
+    </p>
+    {% if g.summary %}<p class="lead">{{ g.summary }}</p>{% endif %}
+    {% if g.explanation or g.risk %}
+    <dl class="explain">
+      {% if g.explanation %}<dt>Por que é um problema</dt><dd>{{ g.explanation }}</dd>{% endif %}
+      {% if g.risk %}<dt>O que um atacante pode fazer</dt><dd>{{ g.risk }}</dd>{% endif %}
+    </dl>
+    {% endif %}
+    {% if g.action %}
+    <p class="see-plan">Como corrigir: <a href="#{{ g.action.anchor }}">ação {{ g.action.index }} do plano, “{{ g.action.title }}”</a>.</p>
+    {% elif g.triaged_only %}
+    <p class="see-plan">Todas as ocorrências foram triadas e não entram no plano.</p>
+    {% elif g.info_only %}
+    <p class="see-plan">Informativo: registrado para o inventário, sem correção obrigatória.</p>
+    {% endif %}
+    <ol class="occurrences">
+      {% for o in g.occurrences %}
+      <li class="occ" id="{{ o.anchor }}">
+        <div class="occ-top">
+          {{ band_chip(o.band, not o.counts) }}
+          {% if o.priority %}<span class="small muted num">prioridade {{ o.priority }}</span>{% endif %}
+          {% if o.severity %}{{ sev_chip(o.severity) }}{% endif %}
+          {% if not o.status.open %}<span class="chip chip-plain">{{ o.status.label }}</span>{% endif %}
+          {% if o.kev %}<span class="chip chip-kev">CISA KEV</span>{% endif %}
+          <span class="asset">{{ o.asset }}</span>
+        </div>
+        {% if o.title %}<p class="occ-title">{{ o.title }}</p>{% endif %}
+        <ul class="meta-list">
+          <li><span class="k">Confiança</span>{{ o.confidence }}</li>
+          <li><span class="k">Exposição</span>{{ o.exposure }}</li>
+          <li><span class="k">Situação</span>{{ o.status.label }}</li>
+          <li><span class="k">Visto pela primeira vez</span><span class="num">{{ o.first_seen }}</span></li>
+          {% if o.tech %}<li><span class="k">Tecnologia</span>{{ o.tech }}</li>{% endif %}
+        </ul>
+        {% if o.status.note %}<p class="small"><span class="k">Nota da triagem:</span>{{ o.status.note }}</p>{% endif %}
+        {% if o.cves %}
+        <p class="small cves"><span class="k">CVEs:</span>
+          {% for c in o.cves %}<span class="cve">{{ link({"url": c.url, "text": c.id}) }}{% if c.kev %} <span class="chip chip-kev-soft">CISA KEV</span>{% endif %}</span>
+          {% endfor %}
+        </p>
+        {% endif %}
+        {% if o.scenarios %}<p class="small"><span class="k">Faz parte de:</span>{{ o.scenarios|join("; ") }}</p>{% endif %}
+        {% if o.evidence %}
+        <span class="label-small">Evidência{% if o.evidence_clipped %} (cortada; o JSON tem o texto completo){% endif %}</span>
+        <pre class="evidence">{{ o.evidence }}</pre>
+        {% endif %}
+        {% if o.details %}
+        <dl class="kv">
+          {% for d in o.details %}<dt>{{ d.key }}</dt><dd>{{ d.value }}</dd>{% endfor %}
+        </dl>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ol>
+    {% if g.hidden %}<p class="small muted more">Mais {{ plural(g.hidden, "ocorrência", "ocorrências") }} no CSV e no JSON.</p>{% endif %}
+    {% if g.references %}
+    <details class="refs">
+      <summary>Referências ({{ g.references|length }})</summary>
+      <ul>{% for r in g.references %}<li>{{ link(r) }}</li>{% endfor %}</ul>
+    </details>
+    {% endif %}
+  </article>
+  {% endfor %}
+</section>
+{% endif %}
+
+{% if kev %}
+<section class="block" id="kev" aria-labelledby="kev-titulo">
+  <h2 id="kev-titulo">Exploração conhecida (CISA KEV)</h2>
+  <p class="section-intro">Estas vulnerabilidades constam do catálogo da CISA de falhas já exploradas por atacantes reais. Trate como prioridade máxima.</p>
+  <div class="scroll">
+  <table class="data">
+    <thead><tr><th scope="col">CVE</th><th scope="col">Vulnerabilidade</th><th scope="col" class="nowrap">No catálogo desde</th><th scope="col">Ransomware</th><th scope="col">Onde foi encontrada</th></tr></thead>
+    <tbody>
+    {% for k in kev %}
+    <tr>
+      <td class="id">{{ link({"url": k.url, "text": k.cve}) }}</td>
+      <td>{{ k.name }}{% if k.vendor or k.product %}<br><span class="small muted">{{ k.vendor }} {{ k.product }}</span>{% endif %}</td>
+      <td class="id">{{ k.date_added or "—" }}</td>
+      <td>{% if k.ransomware %}<span class="chip sev-high">Usada em ransomware</span>{% else %}<span class="none">Sem registro</span>{% endif %}</td>
+      <td>{% if k.anchor %}<a href="#{{ k.anchor }}">{{ k.title }}</a>{% else %}{{ k.title }}{% endif %}<br><span class="asset">{{ k.asset }}</span></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endif %}
+
+{% if verdict.evaluated or strengths %}
+<section class="block" id="pontos-fortes" aria-labelledby="fortes-titulo">
+  <h2 id="fortes-titulo">Pontos fortes</h2>
+  {% if strengths %}
+  <p class="section-intro">Controles verificados e aprovados nesta auditoria.</p>
+  <ul class="strengths">
+    {% for s in strengths %}
+    <li><span class="ok" aria-hidden="true">✓</span><span>{{ s.text }}{% if s.assets %} <span class="muted small">em</span> {% for asset in s.assets %}<span class="asset">{{ asset }}</span>{% if not loop.last %}<span class="muted">, </span>{% endif %}{% endfor %}{% if s.more %} <span class="muted small">e mais {{ s.more }}</span>{% endif %}{% endif %}</span></li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="section-intro">Nenhum controle aprovado foi registrado nesta auditoria.</p>
+  {% endif %}
+</section>
+{% endif %}
+
+{% if verdict.evaluated %}
+<section class="block compliance" id="conformidade" aria-labelledby="conformidade-titulo">
+  <h2 id="conformidade-titulo">Conformidade</h2>
+  <p class="section-intro">Os achados abertos mapeados para referências de mercado. Serve de apoio a auditorias e planos de adequação; não substitui uma certificação. “Sem achados” vale só para o que o EIGAN verifica (leituras sem intrusão): não garante que a categoria esteja livre de problemas, e verificações que terminaram com erro ou tempo esgotado também não foram concluídas.</p>
+
+  <h3>OWASP Top 10 (2021)</h3>
+  <div class="scroll">
+  <table class="data">
+    <thead><tr><th scope="col">Categoria</th><th scope="col" class="num">Achados</th><th scope="col">Pior severidade</th></tr></thead>
+    <tbody>
+    {% for o in compliance.owasp %}
+    <tr>
+      <td>{{ o.label }}{% if o.titles %}<ul>{% for t in o.titles %}<li>{{ t }}</li>{% endfor %}</ul>{% endif %}</td>
+      {% if o.count %}
+      <td class="num">{{ o.count }}</td>
+      <td>{% if o.worst %}{{ sev_chip(o.worst) }}{% endif %}</td>
+      {% else %}
+      <td class="num none">0</td>
+      <td class="none">{% if o.assessed %}Sem achados nas verificações do EIGAN{% else %}Não avaliado: o EIGAN não tem verificação para esta categoria{% endif %}</td>
+      {% endif %}
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+
+  <h3>CIS Controls v8</h3>
+  {% if compliance.cis %}
+  <div class="scroll">
+  <table class="data">
+    <thead><tr><th scope="col">Salvaguarda</th><th scope="col">Descrição</th><th scope="col" class="num">Achados</th><th scope="col">Pior severidade</th></tr></thead>
+    <tbody>
+    {% for c in compliance.cis %}
+    <tr>
+      <td class="id">{{ c.id }}</td>
+      <td>{{ c.label }}{% if c.titles %}<ul>{% for t in c.titles %}<li>{{ t }}</li>{% endfor %}</ul>{% endif %}</td>
+      <td class="num">{{ c.count }}</td>
+      <td>{% if c.worst %}{{ sev_chip(c.worst) }}{% endif %}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <p class="muted">Nenhuma salvaguarda do CIS Controls v8 com achados abertos.</p>
+  {% endif %}
+
+  <h3>CWE</h3>
+  {% if compliance.cwe %}
+  <div class="scroll">
+  <table class="data">
+    <thead><tr><th scope="col">Fraqueza</th><th scope="col">Problemas</th><th scope="col" class="num">Achados</th><th scope="col">Pior severidade</th></tr></thead>
+    <tbody>
+    {% for c in compliance.cwe %}
+    <tr>
+      <td>{% if c.url %}<a href="{{ c.url }}" rel="noopener noreferrer" target="_blank">{{ c.id }}</a>{% else %}{{ c.id }}{% endif %}</td>
+      <td>{{ c.titles|join("; ") }}</td>
+      <td class="num">{{ c.count }}</td>
+      <td>{% if c.worst %}{{ sev_chip(c.worst) }}{% endif %}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <p class="muted">Nenhuma fraqueza CWE associada aos achados abertos.</p>
+  {% endif %}
+
+  <aside class="lgpd" aria-labelledby="lgpd-titulo">
+    <h3 id="lgpd-titulo">LGPD</h3>
+    {% if compliance.lgpd.count %}
+    <p>{{ compliance.lgpd.text }}</p>
+    <p><strong>{{ plural(compliance.lgpd.count, "achado aberto pode", "achados abertos podem") }} expor dados pessoais:</strong></p>
+    <ul>{% for t in compliance.lgpd.titles %}<li>{{ t }}</li>{% endfor %}</ul>
+    {% else %}
+    <p>Nenhum achado aberto com impacto direto na proteção de dados pessoais (LGPD, art. 46).</p>
+    {% endif %}
+  </aside>
+</section>
+{% endif %}
+
+{% if diff %}
+<section class="block" id="comparacao" aria-labelledby="comparacao-titulo">
+  <h2 id="comparacao-titulo">Comparação com a auditoria anterior</h2>
+  <p class="section-intro">Auditoria anterior do mesmo alvo em {{ diff.previous_date }}{% if diff.previous_profile %} (perfil {{ diff.previous_profile }}){% endif %}.</p>
+  <p class="diff-score num">Nota: <strong>{{ diff.score_before }}</strong>{% if diff.grade_before %} ({{ diff.grade_before }}){% endif %} antes e <strong>{{ diff.score_after }}</strong> agora, {{ diff.delta_text }}.</p>
+  <div class="diff-grid">
+    {% for key, title, empty in [("fixed", "Corrigidos", "Nenhum problema corrigido."), ("new", "Novos", "Nenhum problema novo."), ("persisting", "Ainda abertos", "Nenhum problema continua aberto."), ("unverified", "Não verificados", "Todos os problemas anteriores foram verificados de novo.")] %}
+    <div>
+      <h3>{{ title }} <span class="muted num">({{ diff[key]|length }})</span></h3>
+      {% if key == "unverified" and diff[key] %}<p class="small muted">A checagem que encontrou estes problemas não rodou desta vez (perfil mais leve ou erro). Não dá para afirmar que foram corrigidos.</p>{% endif %}
+      {% if diff[key] %}
+      <ul>
+        {% for item in diff[key] %}
+        <li>{{ sev_chip(item.severity) }} {% if item.anchor %}<a href="#{{ item.anchor }}">{{ item.title }}</a>{% else %}{{ item.title }}{% endif %}<br><span class="asset small">{{ item.asset }}</span></li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="muted small">{{ empty }}</p>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+{% if inventory %}
+<section class="block" id="inventario" aria-labelledby="inventario-titulo">
+  <h2 id="inventario-titulo">Inventário</h2>
+  <p class="section-intro">O que o EIGAN aprendeu sobre o ambiente durante a auditoria.</p>
+  {% for section in inventory %}
+  <details class="inv" open>
+    <summary>{{ section.title }} <span class="muted num">({{ section.count }})</span></summary>
+    <div class="scroll">
+    <table class="data">
+      <thead><tr><th scope="col">Item</th>{% for col in section.columns %}<th scope="col">{{ col }}</th>{% endfor %}</tr></thead>
+      <tbody>
+      {% for row in section.rows %}
+      <tr><td class="asset">{{ row.key }}</td>{% for cell in row.cells %}<td>{{ cell }}</td>{% endfor %}</tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% if section.truncated %}<p class="small muted">Lista cortada em {{ section.rows|length }} itens; o JSON tem todos os fatos.</p>{% endif %}
+  </details>
+  {% endfor %}
+</section>
+{% endif %}
+
+{% if not timeline.empty %}
+<section class="block" id="linha-do-tempo" aria-labelledby="tempo-titulo">
+  <h2 id="tempo-titulo">Linha do tempo</h2>
+  <p class="section-intro">Como o motor de regras decidiu o que verificar e o que não terminou.</p>
+  <details class="timeline">
+    <summary>Mostrar a linha do tempo ({{ timeline.summary }})</summary>
+    <div class="timeline-body">
+      {% if timeline.decisions %}
+      <h3>Decisões do motor</h3>
+      <ol class="decisions">
+        {% for d in timeline.decisions %}<li><time>{{ d.at }}</time><span>{{ d.text }}</span></li>{% endfor %}
+      </ol>
+      {% if timeline.decisions_hidden %}<p class="small muted">Mais {{ plural(timeline.decisions_hidden, "decisão", "decisões") }} no JSON.</p>{% endif %}
+      {% endif %}
+      {% if timeline.problems %}
+      <h3>Verificações que não terminaram</h3>
+      <div class="scroll">
+      <table class="data">
+        <thead><tr><th scope="col">Verificação</th><th scope="col">Situação</th><th scope="col">Sobre</th><th scope="col">Detalhe</th><th scope="col" class="num">Duração</th></tr></thead>
+        <tbody>
+        {% for p in timeline.problems %}
+        <tr><td>{{ p.name }}<br><code class="small muted">{{ p.check_id }}</code></td><td>{{ p.status }}</td><td class="asset">{{ p.asset }}</td><td>{{ p.message or "—" }}</td><td class="num">{{ p.duration }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      </div>
+      {% endif %}
+      {% if timeline.errors %}
+      <h3>Erros</h3>
+      <ul>{% for e in timeline.errors %}<li>{{ e }}</li>{% endfor %}</ul>
+      {% endif %}
+    </div>
+  </details>
+</section>
+{% endif %}
+</main>
+
+<footer class="footer">
+  <p>Gerado pelo EIGAN {{ footer.generator }} em {{ meta.generated }} — análise local por regras, sem IA e sem envio de dados.</p>
+  {% if footer.kev_version %}<p>Catálogo CISA KEV embarcado: versão {{ footer.kev_version }}{% if footer.kev_date %}, publicada em {{ footer.kev_date }}{% endif %}{% if footer.kev_total %} ({{ footer.kev_total }} vulnerabilidades){% endif %}.</p>{% endif %}
+  <p>Identificador da auditoria: <code>{{ meta.scan_id }}</code></p>
+  <p class="auth">Use somente em sistemas que você tem autorização para avaliar.</p>
+</footer>
+</div>
+</body>
+</html>
