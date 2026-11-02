@@ -1,3 +1,4 @@
+# Python
 __pycache__/
 *.py[cod]
 *.egg-info/
@@ -6,36 +7,27 @@ build/
 dist/
 .venv/
 venv/
+
+# Ferramentas de teste e análise
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+.coverage
+htmlcov/
+
+# Dados locais: segredos, histórico de auditorias e relatórios
 .env
 *.db
 *.db-shm
 *.db-wal
 *.sqlite3
-scope.yaml
-report_scan_*.pdf
-report_scan_*.html
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-.coverage
-htmlcov/
-node_modules/
+EIGAN-dados/
 
+# Arquivos de trabalho locais, fora do repositório público
 .claude/
-eigan-screenshots/
-
-# Instruções de desenvolvimento para o assistente de IA (Claude Code) — local,
-# fora do repositório público. O código cita seções (§) deste arquivo como a
-# fonte de verdade dos princípios do projeto.
 CLAUDE.md
-
-# Documentos de planejamento/roadmap local (não pertencem ao repositório público).
 Prompt.txt
 /Prompt*.txt
 TRACKER.local.md
 /*.local.md
-
-# Artefatos de execução de ferramentas externas (saída de scan, nunca versionar)
-/None
-/gowitness.jsonl
-/eigan-screenshots/

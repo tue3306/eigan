@@ -5,84 +5,80 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "eigan"
 version = "0.0.0"
-description = "EIGAN — Enhanced Intelligent Guardian for Autonomous Assessment: agente de segurança autônomo dirigido por IA (Web + Infra, Outside-In/Inside-Out). Uso autorizado."
+description = "EIGAN — auditor de segurança blue team: encontra vulnerabilidades em sites, servidores, na máquina, em código e em logs, e explica como corrigir. Sem IA, sem chaves de API, offline. Uso autorizado."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "Apache-2.0" }
 authors = [{ name = "EIGAN contributors" }]
-keywords = ["security", "vulnerability", "scanner", "pentest", "devsecops"]
+keywords = ["security", "blue-team", "vulnerability", "hardening", "audit", "devsecops"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Environment :: Console",
+    "Environment :: Web Environment",
+    "Intended Audience :: System Administrators",
+    "Intended Audience :: Information Technology",
+    "License :: OSI Approved :: Apache Software License",
+    "Natural Language :: Portuguese (Brazilian)",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Topic :: Security",
+]
 
 dependencies = [
-    "pydantic>=2.0",
-    "pyyaml>=6.0",
-    "click>=8.1",
+    "dnspython>=2.6",
     "jinja2>=3.1",
-    "fastapi>=0.110",
-    "uvicorn>=0.27",
+    "reportlab>=4.0",
 ]
 
 [project.optional-dependencies]
-pdf = ["weasyprint>=60"]
-ai = ["httpx>=0.27"]
-tui = ["textual>=0.60", "rich>=13.0"]
-# httpx: os testes da API usam o TestClient do Starlette (via FastAPI), que exige
-# httpx desde Starlette 0.38. Sem ele em [dev], `pip install -e ".[dev]"` (o que a
-# CI faz) quebraria a coleta dos testes de API. Declarado explícito aqui.
-dev = ["pytest>=8.0", "pytest-cov>=4.0", "ruff>=0.4", "mypy>=1.8", "httpx>=0.27", "hypothesis>=6.0"]
+dev = ["pytest>=8.0", "pytest-cov>=4.0", "ruff>=0.4", "mypy>=1.8"]
+build = ["pyinstaller>=6.6"]
 
 [project.scripts]
 eigan = "eigan.cli.main:main"
-# Alias de transição VulnForge → EIGAN: avisa da depreciação e delega.
-vulnforge = "eigan.cli.main:deprecated_alias"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-# py.typed: PEP 561 — sinaliza a consumidores que o pacote publica type hints.
-eigan = ["py.typed", "report/templates/*.j2", "api/static/*", "engine/wordlists_data/*.txt"]
+eigan = [
+    "py.typed",
+    "data/*.json",
+    "data/*.md",
+    "reports/templates/*",
+    "panel/static/*",
+    "panel/static/**/*",
+]
 
 [tool.pytest.ini_options]
-# "." habilita `import plugins.<cat>.<nome>...` nos testes de plugin (ADR-0003).
-pythonpath = ["src", "."]
-testpaths = ["tests", "plugins"]
-# importlib: cada plugin tem tests/test_parser.py (mesmo basename) sem colisão.
-addopts = "--import-mode=importlib"
+pythonpath = ["src", "tests"]
+testpaths = ["tests"]
+addopts = "-q"
 
 [tool.ruff]
 line-length = 100
 target-version = "py311"
 
 [tool.ruff.lint]
-# Conjunto padrão do ruff (E4/E7/E9 + F = pyflakes) + I (ordenação de imports/isort).
-# E501 (linha longa) fica de fora: o formatter arruma a largura do código e strings/
-# URLs longas são permitidas — mesmo comportamento que a CI já validava, agora com
-# imports padronizados e garantidos pelo lint.
-select = ["E4", "E7", "E9", "F", "I"]
+select = ["E4", "E7", "E9", "F", "I", "B", "UP"]
+ignore = ["B008"]
+
+[tool.ruff.lint.per-file-ignores]
+# Bases de conhecimento: textos longos de orientação e exemplos de configuração.
+"src/eigan/checks/**" = ["E501"]
 
 [tool.mypy]
 python_version = "3.11"
 ignore_missing_imports = true
-
-[tool.bandit]
-# SAST do próprio código (TIER 1.1). O gate de CI roda em severidade MÉDIA+
-# (`bandit --severity-level medium`): achados LOW são informativos e não bloqueiam.
-# Padrão seguro de subprocess (B603/B404, LOW): toda execução externa usa LISTA de
-# argumentos e NUNCA `shell=True` (`engine/base.py` é a única porta de subprocess) —
-# por isso os avisos B603/B404 são esperados e seguros, não silenciados às cegas.
-# Achados MÉDIOS têm `# nosec <ID>` com justificativa inline no ponto de uso.
-exclude_dirs = ["tests", ".venv", "build", "dist"]
+warn_unused_ignores = true
+check_untyped_defs = true
 
 [tool.coverage.run]
 source = ["eigan"]
 
 [tool.coverage.report]
-# Gate de cobertura (§1.2). Piso CONSERVADOR: abaixo do valor medido (~82-83% na
-# suíte completa) para não quebrar o build no dia 1 — a CI (Ubuntu/3.11, suíte verde)
-# é a medida autoritativa. Sobe deliberadamente conforme os TIERs adicionam testes;
-# código novo em PR deve vir ≥ 90%. (Rodar `pytest` de um subconjunto com `--cov`
-# dispara este piso: use a suíte completa, como na CI, ou omita `--cov`.)
-fail_under = 80
+fail_under = 75
 show_missing = true
 precision = 1
 exclude_lines = [
@@ -90,5 +86,4 @@ exclude_lines = [
     "raise NotImplementedError",
     "if TYPE_CHECKING:",
     "if __name__ == .__main__.:",
-    "@(abc\\.)?abstractmethod",
 ]

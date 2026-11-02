@@ -1,0 +1,5 @@
+# Normaliza fim de linha no repositório; scripts de shell sempre com LF.
+* text=auto
+*.sh text eol=lf
+*.ico binary
+*.png binary

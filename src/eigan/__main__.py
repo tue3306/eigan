@@ -1,6 +1,8 @@
-"""Permite `python3 -m eigan` — equivalente ao comando `eigan`."""
+"""Permite ``python -m eigan`` (mesmo comportamento do comando ``eigan``)."""
 
-from .cli.main import main
+import sys
+
+from eigan.cli.main import main
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

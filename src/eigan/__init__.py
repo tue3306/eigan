@@ -1,9 +1,17 @@
-"""EIGAN — plataforma modular de operações de segurança (Red/Blue/Purple).
+"""EIGAN — auditor de segurança blue team.
 
-Uso autorizado apenas. Ver README (aviso legal) e security/scope.py.
+Encontra vulnerabilidades e configurações fracas em sites, aplicações web,
+servidores, na própria máquina, em projetos de código e em logs — e explica, em
+português, o risco de cada problema e o passo a passo para corrigir.
 
-Fonte única da versão do produto: os demais módulos (CLI, API, relatório)
-importam ``__version__`` daqui em vez de fixar a string, evitando drift.
+Funciona sem IA e sem chaves de API: a análise é feita por um motor de regras
+(encadeamento de fatos), uma base de conhecimento embarcada e dados offline.
+Uso autorizado apenas: audite somente o que você administra ou tem permissão
+escrita para testar.
 """
 
 __version__ = "0.0.0"
+APP_NAME = "EIGAN"
+APP_TAGLINE = "Enhanced Intelligent Guardian for Autonomous Assessment"
+
+__all__ = ["APP_NAME", "APP_TAGLINE", "__version__"]
